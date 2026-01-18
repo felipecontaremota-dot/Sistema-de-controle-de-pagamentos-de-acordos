@@ -827,9 +827,9 @@ async def get_receipts(
                             total_14 += paid_value
                         case_ids_with_receipts.add(case["id"])
     
-    # Alvarás
+    # Alvarás PAGOS apenas
     if not type or type == "all" or type == "alvara":
-        alvaras = await db.alvaras.find({}, {"_id": 0}).to_list(10000)
+        alvaras = await db.alvaras.find({"status_alvara": "Alvará pago"}, {"_id": 0}).to_list(10000)
         for alvara in alvaras:
             data_alvara = alvara.get("data_alvara")
             if data_alvara and (not start_date or data_alvara >= start_date) and (not end_date or data_alvara <= end_date):
