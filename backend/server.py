@@ -426,12 +426,16 @@ async def delete_case(case_id: str, current_user: dict = Depends(get_current_use
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
     
+    # Excluir agreement e installments
     agreement = await db.agreements.find_one({"case_id": case_id}, {"_id": 0})
     if agreement:
         await db.installments.delete_many({"agreement_id": agreement["id"]})
         await db.agreements.delete_one({"id": agreement["id"]})
     
+    # Excluir alvarás
     await db.alvaras.delete_many({"case_id": case_id})
+    
+    # Excluir caso
     await db.cases.delete_one({"id": case_id})
     return {"message": "Case deleted successfully"}
 
