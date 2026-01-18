@@ -592,7 +592,7 @@ class JudicialAgreementTester:
 
     def run_all_tests(self):
         """Run all tests in sequence"""
-        print("🚀 Starting Judicial Agreement System API Tests")
+        print("🚀 Starting Judicial Agreement System API Tests - FASE 2")
         print(f"   Base URL: {self.base_url}")
         print("=" * 60)
         
@@ -603,19 +603,24 @@ class JudicialAgreementTester:
         
         self.test_auth_me()
         
-        # Case management tests
+        # Case management tests (FASE 2)
         self.test_create_case()
         self.test_get_cases()
         self.test_get_case_detail()
         
-        # Agreement tests
-        self.test_create_agreement()
+        # Agreement tests (FASE 2 - with entrada)
+        self.test_create_agreement_with_entry()
+        self.test_create_agreement_with_entry_via_alvara()
         self.test_installments_generation()
         self.test_mark_installment_paid()
         
-        # Calculation tests
+        # Alvará tests (FASE 2)
+        self.test_alvara_crud_operations()
+        
+        # Receipts and calculation tests (FASE 2)
+        self.test_receipts_endpoint()
+        self.test_total_received_calculation()
         self.test_recovery_percentage_calculation()
-        self.test_agreement_status_calculation()
         
         # Cleanup
         self.cleanup_test_data()
@@ -625,7 +630,7 @@ class JudicialAgreementTester:
         print(f"📊 Test Summary: {self.tests_passed}/{self.tests_run} tests passed")
         
         if self.tests_passed == self.tests_run:
-            print("🎉 All tests passed!")
+            print("🎉 All FASE 2 tests passed!")
             return True
         else:
             print("⚠️  Some tests failed. Check details above.")
