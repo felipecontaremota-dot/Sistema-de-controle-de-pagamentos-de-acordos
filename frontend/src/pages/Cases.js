@@ -231,12 +231,12 @@ export default function Cases({ token, setToken }) {
               </div>
               <div>
                 <Label htmlFor="status-filter">Status do acordo</Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter || undefined} onValueChange={setStatusFilter}>
                   <SelectTrigger className="mt-1" data-testid="status-filter">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="Quitado">Quitado</SelectItem>
                     <SelectItem value="Em andamento">Em andamento</SelectItem>
                     <SelectItem value="Em atraso">Em atraso</SelectItem>
@@ -247,12 +247,12 @@ export default function Cases({ token, setToken }) {
               </div>
               <div>
                 <Label htmlFor="beneficiary-filter">Beneficiário</Label>
-                <Select value={beneficiaryFilter} onValueChange={setBeneficiaryFilter}>
+                <Select value={beneficiaryFilter || undefined} onValueChange={setBeneficiaryFilter}>
                   <SelectTrigger className="mt-1" data-testid="beneficiary-filter">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="31">31</SelectItem>
                     <SelectItem value="14">14</SelectItem>
                   </SelectContent>
