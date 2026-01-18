@@ -1033,7 +1033,22 @@ export default function CaseDetail({ token, setToken }) {
                     {data.case.status_processo && (
                       <div>
                         <dt className="text-sm text-slate-600">Status do Processo</dt>
-                        <dd><Badge variant="outline">{data.case.status_processo}</Badge></dd>
+                        <dd>
+                          <Badge 
+                            variant="outline"
+                            className={
+                              data.case.status_processo === 'Extinto'
+                                ? 'bg-black text-white border-black'
+                                : data.case.status_processo === 'Acordo'
+                                ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                : data.case.status_processo === 'Sucesso'
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                : ''
+                            }
+                          >
+                            {data.case.status_processo}
+                          </Badge>
+                        </dd>
                       </div>
                     )}
                     {data.case.curso && (
