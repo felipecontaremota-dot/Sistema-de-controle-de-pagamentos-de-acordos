@@ -244,6 +244,7 @@ export default function CaseDetail({ token, setToken }) {
                     <DialogContent data-testid="create-agreement-dialog">
                       <DialogHeader>
                         <DialogTitle>Criar Acordo</DialogTitle>
+                        <DialogDescription>Configure o acordo judicial com parcelas mensais</DialogDescription>
                       </DialogHeader>
                       <form onSubmit={handleCreateAgreement} className="space-y-4">
                         <div>
