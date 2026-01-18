@@ -148,6 +148,7 @@ export default function Cases({ token, setToken }) {
               <DialogContent data-testid="create-case-dialog">
                 <DialogHeader>
                   <DialogTitle>Criar Novo Caso</DialogTitle>
+                  <DialogDescription>Preencha os dados do novo caso judicial</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleCreateCase} className="space-y-4">
                   <div>
