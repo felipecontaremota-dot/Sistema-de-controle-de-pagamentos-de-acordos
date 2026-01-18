@@ -455,7 +455,21 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
     doc["created_at"] = doc["created_at"].isoformat()
     await db.agreements.insert_one(doc)
     
-    # Gerar parcelas
+    # Se entrada NÃO via alvará, criar parcela especial #0 (Entrada)
+    if agreement_data.has_entry and not agreement_data.entry_via_alvara:
+        entry_installment = Installment(
+            agreement_id=agreement.id,
+            number=0,
+            due_date=agreement_data.entry_date or agreement_data.first_due_date,
+            paid_date=agreement_data.entry_date,
+            paid_value=agreement_data.entry_value,
+            is_entry=True
+        )
+        entry_doc = entry_installment.model_dump()
+        entry_doc["created_at"] = entry_doc["created_at"].isoformat()
+        await db.installments.insert_one(entry_doc)
+    
+    # Gerar parcelas regulares
     if agreement_data.has_entry and agreement_data.entry_date:
         entry_date = datetime.strptime(agreement_data.entry_date, "%Y-%m-%d")
         first_due = entry_date + timedelta(days=30)
@@ -467,7 +481,8 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
         installment = Installment(
             agreement_id=agreement.id,
             number=i + 1,
-            due_date=due_date.strftime("%Y-%m-%d")
+            due_date=due_date.strftime("%Y-%m-%d"),
+            is_entry=False
         )
         inst_doc = installment.model_dump()
         inst_doc["created_at"] = inst_doc["created_at"].isoformat()
@@ -477,10 +492,11 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
     if agreement_data.has_entry and agreement_data.entry_via_alvara and agreement_data.entry_value:
         alvara = Alvara(
             case_id=agreement_data.case_id,
-            data_alvara=agreement_data.entry_date or agreement_data.first_due_date,
+            data_alvara=agreement_data.entry_date,
             valor_alvara=agreement_data.entry_value,
             beneficiario_codigo=case.get("polo_ativo_codigo", "31"),
-            observacoes="Entrada via Alvará Judicial"
+            observacoes="Entrada via Alvará Judicial",
+            status_alvara="Aguardando alvará"
         )
         alvara_doc = alvara.model_dump()
         alvara_doc["created_at"] = alvara_doc["created_at"].isoformat()
@@ -489,6 +505,33 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
     await db.cases.update_one({"id": agreement_data.case_id}, {"$set": {"has_agreement": True}})
     
     return agreement
+
+
+@api_router.delete("/agreements/{agreement_id}")
+async def delete_agreement(agreement_id: str, current_user: dict = Depends(get_current_user)):
+    agreement = await db.agreements.find_one({"id": agreement_id}, {"_id": 0})
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+    
+    # Verificar se o caso pertence ao usuário
+    case = await db.cases.find_one({"id": agreement["case_id"], "user_id": current_user["id"]}, {"_id": 0})
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    
+    # Verificar se há pagamentos
+    paid_installments = await db.installments.find_one({"agreement_id": agreement_id, "paid_date": {"$ne": None}}, {"_id": 0})
+    has_payments = paid_installments is not None
+    
+    # Excluir installments
+    await db.installments.delete_many({"agreement_id": agreement_id})
+    
+    # Excluir agreement
+    await db.agreements.delete_one({"id": agreement_id})
+    
+    # Atualizar caso
+    await db.cases.update_one({"id": agreement["case_id"]}, {"$set": {"has_agreement": False}})
+    
+    return {"message": "Agreement deleted successfully", "has_payments": has_payments}
 
 
 @api_router.put("/installments/{installment_id}")
