@@ -33,8 +33,8 @@ export default function Cases({ token, setToken }) {
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
-      if (statusFilter) params.append('status_acordo', statusFilter);
-      if (beneficiaryFilter) params.append('beneficiario', beneficiaryFilter);
+      if (statusFilter && statusFilter !== 'all') params.append('status_acordo', statusFilter);
+      if (beneficiaryFilter && beneficiaryFilter !== 'all') params.append('beneficiario', beneficiaryFilter);
 
       const response = await axios.get(`${API}/cases?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
