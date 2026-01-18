@@ -581,6 +581,24 @@ export default function Cases({ token, setToken }) {
           )}
         </div>
       </main>
+
+      <AlertDialog open={deleteCaseDialogOpen} onOpenChange={setDeleteCaseDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Caso</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este caso? Esta ação excluirá permanentemente o caso, o acordo,
+              todas as parcelas e alvarás vinculados. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCase} className="bg-rose-600 hover:bg-rose-700">
+              Excluir Tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
