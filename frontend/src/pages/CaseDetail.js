@@ -402,7 +402,19 @@ export default function CaseDetail({ token, setToken }) {
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
               {data.agreement ? (
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-slate-900">Detalhes do Acordo</h3>
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-slate-900">Detalhes do Acordo</h3>
+                    <Button
+                      onClick={() => setDeleteAgreementDialogOpen(true)}
+                      variant="outline"
+                      size="sm"
+                      className="text-rose-600 hover:bg-rose-50 border-rose-200"
+                      data-testid="delete-agreement-button"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Excluir Acordo
+                    </Button>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-slate-600">Valor total</p>
