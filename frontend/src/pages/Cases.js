@@ -541,17 +541,32 @@ export default function Cases({ token, setToken }) {
                     </td>
                     <td className="px-6 py-4">{getStatusBadge(case_.status_acordo)}</td>
                     <td className="px-6 py-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditDialog(case_);
-                        }}
-                        data-testid={`edit-case-${case_.id}`}
-                      >
-                        Editar
-                      </Button>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(case_);
+                          }}
+                          data-testid={`edit-case-${case_.id}`}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-rose-600 hover:bg-rose-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCaseToDelete(case_);
+                            setDeleteCaseDialogOpen(true);
+                          }}
+                          data-testid={`delete-case-${case_.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
