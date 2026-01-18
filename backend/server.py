@@ -353,6 +353,10 @@ async def get_cases(
             
             if pending_count == 0:
                 status_do_acordo = "Quitado"
+                # Atualizar status_processo para "Sucesso" quando acordo quitado
+                if case.get("status_processo") != "Sucesso":
+                    await db.cases.update_one({"id": case_id}, {"$set": {"status_processo": "Sucesso"}})
+                    case["status_processo"] = "Sucesso"
             elif has_descumprido:
                 status_do_acordo = "Descumprido"
             elif has_atrasado:
