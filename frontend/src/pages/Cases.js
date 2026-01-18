@@ -143,6 +143,24 @@ export default function Cases({ token, setToken }) {
     }
   };
 
+  const handleDeleteCase = async () => {
+    setLoading(true);
+
+    try {
+      await axios.delete(`${API}/cases/${caseToDelete.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success('Caso excluído com sucesso!');
+      setDeleteCaseDialogOpen(false);
+      setCaseToDelete(null);
+      fetchCases();
+    } catch (error) {
+      toast.error('Erro ao excluir caso');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     setToken(null);
     navigate('/login');
