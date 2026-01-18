@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-01-18T12:29:20.698463",
-  "total_tests": 35,
-  "passed_tests": 35,
-  "success_rate": 100.0,
+  "timestamp": "2026-01-18T14:05:38.759320",
+  "total_tests": 61,
+  "passed_tests": 60,
+  "success_rate": 98.36065573770492,
   "test_results": [
     {
       "test": "Login with test credentials",
@@ -25,6 +25,36 @@
       "details": ""
     },
     {
+      "test": "FASE 2 field - numero_processo",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "FASE 2 field - data_protocolo",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "FASE 2 field - status_processo",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "FASE 2 field - data_matricula",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "FASE 2 field - cpf",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "FASE 2 field - curso",
+      "success": true,
+      "details": ""
+    },
+    {
       "test": "List all cases",
       "success": true,
       "details": ""
@@ -36,6 +66,11 @@
     },
     {
       "test": "Filter cases by beneficiary",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Filter cases by status_processo",
       "success": true,
       "details": ""
     },
@@ -70,7 +105,42 @@
       "details": ""
     },
     {
-      "test": "Create agreement",
+      "test": "Create agreement with entry",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Agreement has_entry field",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Agreement entry_value field",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Create case for alvar\u00e1 entry test",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Create agreement with entry via alvar\u00e1",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Check automatic alvar\u00e1 creation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Automatic alvar\u00e1 creation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Cleanup alvar\u00e1 test case",
       "success": true,
       "details": ""
     },
@@ -155,24 +225,84 @@
       "details": ""
     },
     {
+      "test": "Create alvar\u00e1",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get alvar\u00e1s for case",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Update alvar\u00e1",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Alvar\u00e1 update verification",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get receipts - all",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Receipts response - receipts",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Receipts response - kpis",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Receipts response - monthly_consolidation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get receipts - month preset",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get receipts - beneficiary filter",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get receipts - type filter",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Check total received with alvar\u00e1",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Total received calculation with alvar\u00e1",
+      "success": true,
+      "details": "Total: 10500.0"
+    },
+    {
       "test": "Check recovery percentage",
       "success": true,
       "details": ""
     },
     {
       "test": "Recovery percentage calculation",
-      "success": true,
-      "details": ""
+      "success": false,
+      "details": "Expected ~5.0%, got 21.0%"
     },
     {
-      "test": "Check agreement status calculation",
+      "test": "Cleanup - Delete test alvar\u00e1",
       "success": true,
       "details": ""
-    },
-    {
-      "test": "Agreement status calculation",
-      "success": true,
-      "details": "Status: Em andamento"
     },
     {
       "test": "Cleanup - Delete test case",
