@@ -602,6 +602,156 @@ async def delete_alvara(alvara_id: str, current_user: dict = Depends(get_current
     return {"message": "Alvara deleted successfully"}
 
 
+@api_router.get("/receipts/pdf")
+async def get_receipts_pdf(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    beneficiario: Optional[str] = None,
+    type: Optional[str] = None,
+    preset: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    # Chamar o endpoint de receipts para obter os dados
+    params = {}
+    if start_date: params['start_date'] = start_date
+    if end_date: params['end_date'] = end_date
+    if beneficiario: params['beneficiario'] = beneficiario
+    if type: params['type'] = type
+    if preset: params['preset'] = preset
+    
+    # Obter dados (reutilizar lógica do endpoint get_receipts)
+    today = datetime.now(timezone.utc).date()
+    
+    if preset == "day":
+        start_date = today.strftime("%Y-%m-%d")
+        end_date = today.strftime("%Y-%m-%d")
+        period_text = f"{today.strftime('%d/%m/%Y')}"
+    elif preset == "week":
+        start_of_week = today - timedelta(days=today.weekday())
+        end_of_week = start_of_week + timedelta(days=6)
+        start_date = start_of_week.strftime("%Y-%m-%d")
+        end_date = end_of_week.strftime("%Y-%m-%d")
+        period_text = f"{start_of_week.strftime('%d/%m/%Y')} a {end_of_week.strftime('%d/%m/%Y')}"
+    elif preset == "month":
+        start_of_month = today.replace(day=1)
+        if today.month == 12:
+            end_of_month = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            end_of_month = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
+        start_date = start_of_month.strftime("%Y-%m-%d")
+        end_date = end_of_month.strftime("%Y-%m-%d")
+        period_text = f"{start_of_month.strftime('%m/%Y')}"
+    elif preset == "year":
+        start_of_year = today.replace(month=1, day=1)
+        end_of_year = today.replace(month=12, day=31)
+        start_date = start_of_year.strftime("%Y-%m-%d")
+        end_date = end_of_year.strftime("%Y-%m-%d")
+        period_text = f"{start_of_year.strftime('%Y')}"
+    else:
+        period_text = f"{start_date or 'Início'} a {end_date or 'Fim'}"
+    
+    receipts = []
+    total_received = 0.0
+    total_31 = 0.0
+    total_14 = 0.0
+    total_parcelas = 0.0
+    total_alvaras = 0.0
+    case_ids_with_receipts = set()
+    
+    user_cases = await db.cases.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(1000)
+    case_map = {c["id"]: c for c in user_cases}
+    
+    # Parcelas pagas
+    if not type or type == "all" or type == "parcelas":
+        installments = await db.installments.find({"paid_date": {"$ne": None}}, {"_id": 0}).to_list(10000)
+        for inst in installments:
+            paid_date = inst.get("paid_date")
+            if paid_date and (not start_date or paid_date >= start_date) and (not end_date or paid_date <= end_date):
+                agreement = await db.agreements.find_one({"id": inst["agreement_id"]}, {"_id": 0})
+                if agreement and agreement["case_id"] in case_map:
+                    case = case_map[agreement["case_id"]]
+                    beneficiario_codigo = case.get("polo_ativo_codigo")
+                    
+                    if not beneficiario or beneficiario == "all" or beneficiario_codigo == beneficiario:
+                        paid_value = inst.get("paid_value", 0)
+                        type_label = "Entrada" if inst.get("is_entry") else "Parcela"
+                        receipts.append({
+                            "date": paid_date,
+                            "case_id": case["id"],
+                            "debtor": case["debtor_name"],
+                            "numero_processo": case.get("numero_processo", ""),
+                            "type": type_label,
+                            "value": paid_value,
+                            "beneficiario": beneficiario_codigo or "",
+                            "observacoes": f"{type_label} #{inst['number']}" if not inst.get("is_entry") else "Entrada do acordo"
+                        })
+                        total_received += paid_value
+                        total_parcelas += paid_value
+                        if beneficiario_codigo == "31":
+                            total_31 += paid_value
+                        elif beneficiario_codigo == "14":
+                            total_14 += paid_value
+                        case_ids_with_receipts.add(case["id"])
+    
+    # Alvarás PAGOS
+    if not type or type == "all" or type == "alvara":
+        alvaras = await db.alvaras.find({"status_alvara": "Alvará pago"}, {"_id": 0}).to_list(10000)
+        for alvara in alvaras:
+            data_alvara = alvara.get("data_alvara")
+            if data_alvara and (not start_date or data_alvara >= start_date) and (not end_date or data_alvara <= end_date):
+                if alvara["case_id"] in case_map:
+                    case = case_map[alvara["case_id"]]
+                    beneficiario_codigo = alvara.get("beneficiario_codigo")
+                    
+                    if not beneficiario or beneficiario == "all" or beneficiario_codigo == beneficiario:
+                        valor_alvara = alvara.get("valor_alvara", 0)
+                        receipts.append({
+                            "date": data_alvara,
+                            "case_id": case["id"],
+                            "debtor": case["debtor_name"],
+                            "numero_processo": case.get("numero_processo", ""),
+                            "type": "Alvará Judicial",
+                            "value": valor_alvara,
+                            "beneficiario": beneficiario_codigo or "",
+                            "observacoes": alvara.get("observacoes", "")
+                        })
+                        total_received += valor_alvara
+                        total_alvaras += valor_alvara
+                        if beneficiario_codigo == "31":
+                            total_31 += valor_alvara
+                        elif beneficiario_codigo == "14":
+                            total_14 += valor_alvara
+                        case_ids_with_receipts.add(case["id"])
+    
+    receipts.sort(key=lambda x: x["date"], reverse=True)
+    
+    data = {
+        "receipts": receipts,
+        "kpis": {
+            "total_received": round(total_received, 2),
+            "total_31": round(total_31, 2),
+            "total_14": round(total_14, 2),
+            "total_parcelas": round(total_parcelas, 2),
+            "total_alvaras": round(total_alvaras, 2),
+            "cases_with_receipts": len(case_ids_with_receipts)
+        }
+    }
+    
+    filters = {
+        "period": period_text,
+        "beneficiario": beneficiario if beneficiario and beneficiario != "all" else "Todos",
+        "type": type if type and type != "all" else "Todos"
+    }
+    
+    pdf_buffer = generate_receipts_pdf(data, filters)
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=recebimentos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"}
+    )
+
+
 @api_router.get("/receipts")
 async def get_receipts(
     start_date: Optional[str] = None,
