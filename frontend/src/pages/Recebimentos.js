@@ -92,6 +92,38 @@ export default function Recebimentos({ token, setToken }) {
     toast.success('Arquivo CSV exportado com sucesso!');
   };
 
+  const exportToPDF = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (preset !== 'custom') {
+        params.append('preset', preset);
+      } else {
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+      }
+      if (beneficiario !== 'all') params.append('beneficiario', beneficiario);
+      if (type !== 'all') params.append('type', type);
+
+      const response = await axios.get(`${API}/receipts/pdf?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `recebimentos_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao gerar PDF');
+    }
+  };
+
   if (loading && !data) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
