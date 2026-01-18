@@ -457,29 +457,53 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
     doc["created_at"] = doc["created_at"].isoformat()
     await db.agreements.insert_one(doc)
     
-    # Se entrada NÃO via alvará, criar parcela especial #0 (Entrada)
+    # Se entrada NÃO via alvará, criar parcela especial #0 (Entrada) SEMPRE EM ABERTO
     if agreement_data.has_entry and not agreement_data.entry_via_alvara:
         entry_installment = Installment(
             agreement_id=agreement.id,
             number=0,
             due_date=agreement_data.entry_date or agreement_data.first_due_date,
-            paid_date=agreement_data.entry_date,
-            paid_value=agreement_data.entry_value,
+            paid_date=None,  # SEMPRE NONE - usuário deve marcar manualmente
+            paid_value=None,  # SEMPRE NONE - usuário deve marcar manualmente
             is_entry=True
         )
         entry_doc = entry_installment.model_dump()
         entry_doc["created_at"] = entry_doc["created_at"].isoformat()
         await db.installments.insert_one(entry_doc)
     
-    # Gerar parcelas regulares
+    # Gerar parcelas regulares com 1 MÊS CALENDÁRIO (não 30 dias)
     if agreement_data.has_entry and agreement_data.entry_date:
         entry_date = datetime.strptime(agreement_data.entry_date, "%Y-%m-%d")
-        first_due = entry_date + timedelta(days=30)
+        # Adicionar 1 mês calendário
+        if entry_date.month == 12:
+            first_due = entry_date.replace(year=entry_date.year + 1, month=1)
+        else:
+            first_due = entry_date.replace(month=entry_date.month + 1)
     else:
         first_due = datetime.strptime(agreement_data.first_due_date, "%Y-%m-%d")
     
     for i in range(agreement_data.installments_count):
-        due_date = first_due + timedelta(days=30 * i)
+        # Adicionar i meses calendário
+        year = first_due.year
+        month = first_due.month + i
+        day = first_due.day
+        
+        # Ajustar ano e mês se ultrapassar 12
+        while month > 12:
+            month -= 12
+            year += 1
+        
+        # Tentar criar a data, ajustando o dia se necessário
+        try:
+            due_date = datetime(year, month, day)
+        except ValueError:
+            # Dia não existe no mês (ex: 31 em fevereiro), usar último dia do mês
+            if month == 12:
+                next_month = datetime(year + 1, 1, 1)
+            else:
+                next_month = datetime(year, month + 1, 1)
+            due_date = next_month - timedelta(days=1)
+        
         installment = Installment(
             agreement_id=agreement.id,
             number=i + 1,
@@ -494,7 +518,7 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
     if agreement_data.has_entry and agreement_data.entry_via_alvara and agreement_data.entry_value:
         alvara = Alvara(
             case_id=agreement_data.case_id,
-            data_alvara=agreement_data.entry_date,
+            data_alvara=agreement_data.entry_date,  # Pode ser None
             valor_alvara=agreement_data.entry_value,
             beneficiario_codigo=case.get("polo_ativo_codigo", "31"),
             observacoes="Entrada via Alvará Judicial",
@@ -504,7 +528,11 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
         alvara_doc["created_at"] = alvara_doc["created_at"].isoformat()
         await db.alvaras.insert_one(alvara_doc)
     
-    await db.cases.update_one({"id": agreement_data.case_id}, {"$set": {"has_agreement": True}})
+    # Atualizar caso: has_agreement = True e status_processo = "Acordo"
+    await db.cases.update_one(
+        {"id": agreement_data.case_id},
+        {"$set": {"has_agreement": True, "status_processo": "Acordo"}}
+    )
     
     return agreement
 
