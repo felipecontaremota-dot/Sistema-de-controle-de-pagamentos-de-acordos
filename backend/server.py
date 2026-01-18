@@ -175,6 +175,7 @@ class Installment(BaseModel):
     paid_date: Optional[str] = None
     paid_value: Optional[float] = None
     status_calc: str = "pending"
+    is_entry: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
