@@ -180,10 +180,11 @@ class Installment(BaseModel):
 
 class AlvaraCreate(BaseModel):
     case_id: str
-    data_alvara: str
+    data_alvara: Optional[str] = None
     valor_alvara: float
     beneficiario_codigo: str
     observacoes: Optional[str] = None
+    status_alvara: str = "Aguardando alvará"
 
 
 class AlvaraUpdate(BaseModel):
@@ -191,16 +192,18 @@ class AlvaraUpdate(BaseModel):
     valor_alvara: Optional[float] = None
     beneficiario_codigo: Optional[str] = None
     observacoes: Optional[str] = None
+    status_alvara: Optional[str] = None
 
 
 class Alvara(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     case_id: str
-    data_alvara: str
+    data_alvara: Optional[str] = None
     valor_alvara: float
     beneficiario_codigo: str
     observacoes: Optional[str] = None
+    status_alvara: str = "Aguardando alvará"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
