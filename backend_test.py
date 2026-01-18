@@ -135,6 +135,14 @@ class JudicialAgreementTester:
                 self.log_test("Beneficiary extraction (31)", True)
             else:
                 self.log_test("Beneficiary extraction (31)", False, f"Expected '31', got '{response.get('polo_ativo_codigo')}'")
+            
+            # Verify new FASE 2 fields
+            fase2_fields = ['numero_processo', 'data_protocolo', 'status_processo', 'data_matricula', 'cpf', 'curso']
+            for field in fase2_fields:
+                if field in response and response[field] == case_data[field]:
+                    self.log_test(f"FASE 2 field - {field}", True)
+                else:
+                    self.log_test(f"FASE 2 field - {field}", False, f"Expected '{case_data[field]}', got '{response.get(field)}'")
         
         return success
 
