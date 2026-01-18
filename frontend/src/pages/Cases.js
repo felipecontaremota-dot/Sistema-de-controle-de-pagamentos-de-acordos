@@ -511,7 +511,20 @@ export default function Cases({ token, setToken }) {
                     </td>
                     <td className="px-6 py-4">
                       {case_.status_processo ? (
-                        <Badge variant="outline" className="text-xs">{case_.status_processo}</Badge>
+                        <Badge 
+                          variant="outline" 
+                          className={
+                            case_.status_processo === 'Extinto' 
+                              ? 'bg-black text-white border-black'
+                              : case_.status_processo === 'Acordo'
+                              ? 'bg-amber-100 text-amber-800 border-amber-200'
+                              : case_.status_processo === 'Sucesso'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              : 'text-xs'
+                          }
+                        >
+                          {case_.status_processo}
+                        </Badge>
                       ) : (
                         <span className="text-slate-400 text-xs">-</span>
                       )}
