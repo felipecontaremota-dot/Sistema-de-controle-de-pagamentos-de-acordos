@@ -14,6 +14,7 @@ class JudicialAgreementTester:
         self.created_case_id = None
         self.created_agreement_id = None
         self.created_installment_id = None
+        self.created_alvara_id = None
 
     def log_test(self, name, success, details=""):
         """Log test result"""
