@@ -809,15 +809,16 @@ async def get_receipts(
                     
                     if not beneficiario or beneficiario == "all" or beneficiario_codigo == beneficiario:
                         paid_value = inst.get("paid_value", 0)
+                        type_label = "Entrada" if inst.get("is_entry") else "Parcela"
                         receipts.append({
                             "date": paid_date,
                             "case_id": case["id"],
                             "debtor": case["debtor_name"],
                             "numero_processo": case.get("numero_processo", ""),
-                            "type": "Parcela",
+                            "type": type_label,
                             "value": paid_value,
                             "beneficiario": beneficiario_codigo or "",
-                            "observacoes": f"Parcela #{inst['number']}"
+                            "observacoes": f"{type_label} #{inst['number']}" if not inst.get("is_entry") else "Entrada do acordo"
                         })
                         total_received += paid_value
                         total_parcelas += paid_value
