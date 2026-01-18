@@ -643,7 +643,9 @@ export default function CaseDetail({ token, setToken }) {
                     <tbody className="divide-y divide-slate-200">
                       {data.installments.map((inst) => (
                         <tr key={inst.id} className="table-row" data-testid={`installment-row-${inst.id}`}>
-                          <td className="px-6 py-4 font-medium text-slate-900">#{inst.number}</td>
+                          <td className="px-6 py-4 font-medium text-slate-900">
+                            {inst.is_entry ? 'Entrada' : `#${inst.number}`}
+                          </td>
                           <td className="px-6 py-4 font-mono text-slate-900">{formatDateBR(inst.due_date)}</td>
                           <td className="px-6 py-4 font-mono text-slate-900">
                             {inst.paid_date ? formatDateBR(inst.paid_date) : <span className="text-slate-400">-</span>}
