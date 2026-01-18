@@ -1,0 +1,183 @@
+{
+  "timestamp": "2026-01-18T12:29:20.698463",
+  "total_tests": 35,
+  "passed_tests": 35,
+  "success_rate": 100.0,
+  "test_results": [
+    {
+      "test": "Login with test credentials",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get current user",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Create new case",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Beneficiary extraction (31)",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List all cases",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Search cases by debtor name",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Filter cases by beneficiary",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get case detail",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Case detail structure - case",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Case detail structure - agreement",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Case detail structure - installments",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Case detail structure - total_received",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Case detail structure - percent_recovered",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Create agreement",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Check installments generation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installments count",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #1 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #2 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #3 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #4 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #5 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #6 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #7 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #8 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #9 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #10 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #11 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment #12 status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Mark installment as paid",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Installment status update to 'Pago'",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Check recovery percentage",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Recovery percentage calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Check agreement status calculation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Agreement status calculation",
+      "success": true,
+      "details": "Status: Em andamento"
+    },
+    {
+      "test": "Cleanup - Delete test case",
+      "success": true,
+      "details": ""
+    }
+  ]
+}
