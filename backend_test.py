@@ -570,6 +570,16 @@ class JudicialAgreementTester:
 
     def cleanup_test_data(self):
         """Clean up test data"""
+        # Delete alvará first
+        if self.created_alvara_id:
+            success, _ = self.run_test(
+                "Cleanup - Delete test alvará",
+                "DELETE",
+                f"alvaras/{self.created_alvara_id}",
+                200
+            )
+        
+        # Delete case (this will cascade delete agreement and installments)
         if self.created_case_id:
             success, _ = self.run_test(
                 "Cleanup - Delete test case",
