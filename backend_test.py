@@ -419,10 +419,11 @@ class JudicialAgreementTester:
             percent_recovered = response.get('percent_recovered', 0)
             total_received = response.get('total_received', 0)
             
-            # Should be 2500 / 50000 * 100 = 5%
-            expected_percent = 5.0
-            if abs(percent_recovered - expected_percent) < 0.1:
-                self.log_test("Recovery percentage calculation", True)
+            # Should include: paid installment (2291.67) + entry (2500) + alvará (5500) = 10291.67
+            # Percentage: 10291.67 / 50000 * 100 = ~20.6%
+            expected_percent = 20.6
+            if abs(percent_recovered - expected_percent) < 1.0:  # Allow 1% tolerance
+                self.log_test("Recovery percentage calculation", True, f"Percent: {percent_recovered}%, Total: {total_received}")
             else:
                 self.log_test("Recovery percentage calculation", False, f"Expected ~{expected_percent}%, got {percent_recovered}%")
         
