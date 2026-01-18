@@ -215,25 +215,30 @@ class JudicialAgreementTester:
         
         return success
 
-    def test_create_agreement(self):
-        """Test creating an agreement"""
+    def test_create_agreement_with_entry(self):
+        """Test creating an agreement with entrada"""
         if not self.created_case_id:
-            self.log_test("Create agreement", False, "No case ID available")
+            self.log_test("Create agreement with entry", False, "No case ID available")
             return False
         
-        # Calculate first due date (next month)
+        # Calculate dates
+        entry_date = datetime.now().strftime("%Y-%m-%d")
         first_due = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
         
         agreement_data = {
             "case_id": self.created_case_id,
             "total_value": 30000.00,
             "installments_count": 12,
-            "installment_value": 2500.00,
-            "first_due_date": first_due
+            "installment_value": 2291.67,  # (30000 - 2500) / 12
+            "first_due_date": first_due,
+            "has_entry": True,
+            "entry_value": 2500.00,
+            "entry_via_alvara": False,
+            "entry_date": entry_date
         }
         
         success, response = self.run_test(
-            "Create agreement",
+            "Create agreement with entry",
             "POST",
             "agreements",
             200,
@@ -243,8 +248,96 @@ class JudicialAgreementTester:
         if success and 'id' in response:
             self.created_agreement_id = response['id']
             print(f"   Created agreement ID: {self.created_agreement_id}")
+            
+            # Verify entry fields
+            if response.get('has_entry') == True:
+                self.log_test("Agreement has_entry field", True)
+            else:
+                self.log_test("Agreement has_entry field", False)
+                
+            if response.get('entry_value') == 2500.00:
+                self.log_test("Agreement entry_value field", True)
+            else:
+                self.log_test("Agreement entry_value field", False)
         
         return success
+
+    def test_create_agreement_with_entry_via_alvara(self):
+        """Test creating agreement with entry via alvará"""
+        # First delete the existing agreement to test alvará entry
+        if self.created_agreement_id:
+            # We need to create a new case for this test
+            case_data = {
+                "debtor_name": "Maria Santos Teste Alvará",
+                "internal_id": "CASE-ALVARA-001",
+                "value_causa": 40000.00,
+                "polo_ativo_text": "Banco 14 - Conta secundária",
+                "notes": "Caso de teste para entrada via alvará"
+            }
+            
+            success, response = self.run_test(
+                "Create case for alvará entry test",
+                "POST",
+                "cases",
+                200,
+                data=case_data
+            )
+            
+            if not success:
+                return False
+                
+            case_id_alvara = response['id']
+            
+            # Create agreement with entry via alvará
+            entry_date = datetime.now().strftime("%Y-%m-%d")
+            first_due = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+            
+            agreement_data = {
+                "case_id": case_id_alvara,
+                "total_value": 25000.00,
+                "installments_count": 10,
+                "installment_value": 2250.00,  # (25000 - 2500) / 10
+                "first_due_date": first_due,
+                "has_entry": True,
+                "entry_value": 2500.00,
+                "entry_via_alvara": True,
+                "entry_date": entry_date
+            }
+            
+            success, response = self.run_test(
+                "Create agreement with entry via alvará",
+                "POST",
+                "agreements",
+                200,
+                data=agreement_data
+            )
+            
+            if success:
+                # Check if alvará was automatically created
+                success_alvara, alvaras_response = self.run_test(
+                    "Check automatic alvará creation",
+                    "GET",
+                    f"alvaras?case_id={case_id_alvara}",
+                    200
+                )
+                
+                if success_alvara and len(alvaras_response) > 0:
+                    self.log_test("Automatic alvará creation", True)
+                    self.created_alvara_id = alvaras_response[0]['id']
+                else:
+                    self.log_test("Automatic alvará creation", False, "No alvará found")
+            
+            # Cleanup this test case
+            self.run_test(
+                "Cleanup alvará test case",
+                "DELETE",
+                f"cases/{case_id_alvara}",
+                200
+            )
+            
+            return success
+        
+        return True
 
     def test_installments_generation(self):
         """Test that installments were automatically generated"""
