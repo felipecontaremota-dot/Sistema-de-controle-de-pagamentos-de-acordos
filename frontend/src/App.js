@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Cases from './pages/Cases';
 import CaseDetail from './pages/CaseDetail';
+import Recebimentos from './pages/Recebimentos';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
 
@@ -42,6 +43,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <CaseDetail token={token} setToken={setToken} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recebimentos"
+            element={
+              <ProtectedRoute>
+                <Recebimentos token={token} setToken={setToken} />
               </ProtectedRoute>
             }
           />
