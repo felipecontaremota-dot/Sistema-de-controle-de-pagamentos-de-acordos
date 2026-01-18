@@ -845,16 +845,42 @@ export default function CaseDetail({ token, setToken }) {
                     <tbody className="divide-y divide-slate-200">
                       {data.alvaras.map((alvara) => (
                         <tr key={alvara.id} className="table-row" data-testid={`alvara-row-${alvara.id}`}>
-                          <td className="px-6 py-4 font-mono text-slate-900">{formatDateBR(alvara.data_alvara)}</td>
+                          <td className="px-6 py-4 font-mono text-slate-900">
+                            {alvara.data_alvara ? formatDateBR(alvara.data_alvara) : '-'}
+                          </td>
                           <td className="px-6 py-4 font-mono text-emerald-600 font-semibold">
                             {formatCurrency(alvara.valor_alvara)}
                           </td>
                           <td className="px-6 py-4">
                             <Badge className="bg-slate-900 text-white">{alvara.beneficiario_codigo}</Badge>
                           </td>
+                          <td className="px-6 py-4">
+                            <Badge
+                              className={
+                                alvara.status_alvara === 'Alvará pago'
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                  : 'bg-amber-100 text-amber-800 border-amber-200'
+                              }
+                            >
+                              {alvara.status_alvara}
+                            </Badge>
+                          </td>
                           <td className="px-6 py-4 text-slate-700">{alvara.observacoes || '-'}</td>
                           <td className="px-6 py-4">
                             <div className="flex space-x-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleToggleAlvaraStatus(alvara)}
+                                className={
+                                  alvara.status_alvara === 'Aguardando alvará'
+                                    ? 'text-emerald-600 hover:bg-emerald-50'
+                                    : 'text-amber-600 hover:bg-amber-50'
+                                }
+                                data-testid={`toggle-alvara-status-${alvara.id}`}
+                              >
+                                {alvara.status_alvara === 'Aguardando alvará' ? 'Marcar como Pago' : 'Marcar como Aguardando'}
+                              </Button>
                               <Dialog
                                 open={editAlvaraDialogOpen && selectedAlvara?.id === alvara.id}
                                 onOpenChange={(open) => {
