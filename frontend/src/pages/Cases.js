@@ -172,7 +172,7 @@ export default function Cases({ token, setToken }) {
       Quitado: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
       'Em andamento': { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
       'Em atraso': { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' },
-      Descumprido: { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200' },
+      Descumprido: { bg: 'bg-black', text: 'text-white', border: 'border-black' },
       'Dia de pagamento': { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
     };
 
