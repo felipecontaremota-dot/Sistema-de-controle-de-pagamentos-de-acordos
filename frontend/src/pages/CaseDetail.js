@@ -299,7 +299,7 @@ export default function CaseDetail({ token, setToken }) {
       'Pagamento próximo': { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
       'Dia de pagamento': { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
       Atrasado: { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' },
-      Descumprido: { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200' },
+      Descumprido: { bg: 'bg-black', text: 'text-white', border: 'border-black' },
       Pendente: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
     };
 
