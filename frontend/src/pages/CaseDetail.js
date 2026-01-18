@@ -25,6 +25,8 @@ export default function CaseDetail({ token, setToken }) {
   const [alvaraDialogOpen, setAlvaraDialogOpen] = useState(false);
   const [editAlvaraDialogOpen, setEditAlvaraDialogOpen] = useState(false);
   const [deleteAlvaraDialogOpen, setDeleteAlvaraDialogOpen] = useState(false);
+  const [deleteCaseDialogOpen, setDeleteCaseDialogOpen] = useState(false);
+  const [deleteAgreementDialogOpen, setDeleteAgreementDialogOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [selectedAlvara, setSelectedAlvara] = useState(null);
   const [alvaraToDelete, setAlvaraToDelete] = useState(null);
