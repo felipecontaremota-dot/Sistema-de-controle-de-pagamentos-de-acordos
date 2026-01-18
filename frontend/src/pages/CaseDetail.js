@@ -376,6 +376,7 @@ export default function CaseDetail({ token, setToken }) {
                                 <DialogContent data-testid="payment-dialog">
                                   <DialogHeader>
                                     <DialogTitle>Registrar Pagamento - Parcela #{inst.number}</DialogTitle>
+                                    <DialogDescription>Informe a data e o valor do pagamento recebido</DialogDescription>
                                   </DialogHeader>
                                   <form onSubmit={handleMarkAsPaid} className="space-y-4">
                                     <div>
