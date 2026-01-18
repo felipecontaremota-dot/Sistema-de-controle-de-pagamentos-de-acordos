@@ -428,31 +428,143 @@ class JudicialAgreementTester:
         
         return success
 
-    def test_agreement_status_calculation(self):
-        """Test agreement status calculation"""
+    def test_alvara_crud_operations(self):
+        """Test Alvará CRUD operations"""
+        if not self.created_case_id:
+            self.log_test("Alvará CRUD operations", False, "No case ID available")
+            return False
+        
+        # Create alvará
+        alvara_data = {
+            "case_id": self.created_case_id,
+            "data_alvara": datetime.now().strftime("%Y-%m-%d"),
+            "valor_alvara": 5000.00,
+            "beneficiario_codigo": "31",
+            "observacoes": "Alvará de teste"
+        }
+        
         success, response = self.run_test(
-            "Check agreement status calculation",
+            "Create alvará",
+            "POST",
+            "alvaras",
+            200,
+            data=alvara_data
+        )
+        
+        if not success:
+            return False
+            
+        alvara_id = response['id']
+        self.created_alvara_id = alvara_id
+        
+        # Read alvará
+        success, response = self.run_test(
+            "Get alvarás for case",
             "GET",
-            "cases",
+            f"alvaras?case_id={self.created_case_id}",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Update alvará
+        update_data = {
+            "valor_alvara": 5500.00,
+            "observacoes": "Alvará de teste atualizado"
+        }
+        
+        success, response = self.run_test(
+            "Update alvará",
+            "PUT",
+            f"alvaras/{alvara_id}",
+            200,
+            data=update_data
+        )
+        
+        if success and response.get('valor_alvara') == 5500.00:
+            self.log_test("Alvará update verification", True)
+        else:
+            self.log_test("Alvará update verification", False)
+        
+        # Delete alvará will be done in cleanup
+        return success
+
+    def test_receipts_endpoint(self):
+        """Test receipts endpoint with filters"""
+        # Test basic receipts
+        success, response = self.run_test(
+            "Get receipts - all",
+            "GET",
+            "receipts",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Verify response structure
+        required_fields = ['receipts', 'kpis', 'monthly_consolidation']
+        for field in required_fields:
+            if field in response:
+                self.log_test(f"Receipts response - {field}", True)
+            else:
+                self.log_test(f"Receipts response - {field}", False, f"Missing field: {field}")
+        
+        # Test with preset filter
+        success, response = self.run_test(
+            "Get receipts - month preset",
+            "GET",
+            "receipts?preset=month",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Test with beneficiary filter
+        success, response = self.run_test(
+            "Get receipts - beneficiary filter",
+            "GET",
+            "receipts?beneficiario=31",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Test with type filter
+        success, response = self.run_test(
+            "Get receipts - type filter",
+            "GET",
+            "receipts?type=parcelas",
+            200
+        )
+        
+        return success
+
+    def test_total_received_calculation(self):
+        """Test total_received calculation including alvarás"""
+        if not self.created_case_id:
+            self.log_test("Total received calculation", False, "No case ID available")
+            return False
+        
+        success, response = self.run_test(
+            "Check total received with alvará",
+            "GET",
+            f"cases/{self.created_case_id}",
             200
         )
         
         if success:
-            # Find our test case
-            test_case = None
-            for case in response:
-                if case.get('id') == self.created_case_id:
-                    test_case = case
-                    break
+            total_received = response.get('total_received', 0)
+            # Should include: paid installment (2500) + entry (2500) + alvará (5500) = 10500
+            expected_total = 10500.00
             
-            if test_case:
-                status_acordo = test_case.get('status_acordo')
-                if status_acordo in ['Em andamento', 'Quitado', 'Em atraso', 'Descumprido', 'Dia de pagamento']:
-                    self.log_test("Agreement status calculation", True, f"Status: {status_acordo}")
-                else:
-                    self.log_test("Agreement status calculation", False, f"Invalid status: {status_acordo}")
+            if abs(total_received - expected_total) < 0.1:
+                self.log_test("Total received calculation with alvará", True, f"Total: {total_received}")
             else:
-                self.log_test("Agreement status calculation", False, "Test case not found in list")
+                self.log_test("Total received calculation with alvará", False, f"Expected ~{expected_total}, got {total_received}")
         
         return success
 
