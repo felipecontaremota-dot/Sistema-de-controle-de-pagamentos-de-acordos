@@ -94,16 +94,24 @@ export default function CaseDetail({ token, setToken }) {
     }
   }, [agreementForm.total_value, agreementForm.installments_count, agreementForm.has_entry, agreementForm.entry_value]);
 
-  // Calcular data da primeira parcela automaticamente quando há entrada
+  // Calcular data da primeira parcela automaticamente quando há entrada (1 mês calendário)
   useEffect(() => {
     if (agreementForm.has_entry && agreementForm.entry_date) {
-      const entryDate = new Date(agreementForm.entry_date);
-      entryDate.setMonth(entryDate.getMonth() + 1);
-      const firstDueDate = entryDate.toISOString().split('T')[0];
+      const entryDate = new Date(agreementForm.entry_date + 'T00:00:00');
+      // Adicionar 1 mês calendário
+      const firstDueDate = new Date(entryDate);
+      firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+      
+      // Ajustar para último dia do mês se dia não existir
+      if (firstDueDate.getDate() !== entryDate.getDate()) {
+        firstDueDate.setDate(0); // Último dia do mês anterior
+      }
+      
+      const formattedDate = firstDueDate.toISOString().split('T')[0];
       
       setAgreementForm(prev => ({
         ...prev,
-        first_due_date: firstDueDate
+        first_due_date: formattedDate
       }));
     }
   }, [agreementForm.has_entry, agreementForm.entry_date]);
