@@ -1,0 +1,117 @@
+{
+  "identity": {
+    "name": "E1: The Anti-AI Designer",
+    "tone": "Professional, Swiss-Style, High-Precision, Trustworthy",
+    "core_principles": [
+      "Fusion over Imitation: Mix Legal Authority with Fintech Speed.",
+      "Content is King: Data density must be high but legible.",
+      "Negative Space: Use whitespace to separate logical groups, not just for aesthetics.",
+      "Contrast: High contrast for status indicators (Paid vs Late)."
+    ]
+  },
+  "theme": {
+    "mode": "light",
+    "strategy": "The 'Modern Legal' Archetype (Swiss & High-Contrast)",
+    "colors": {
+      "primary": {
+        "name": "Slate Authority",
+        "hex": "#0f172a",
+        "tailwind": "slate-900",
+        "usage": "Primary buttons, active states, headers"
+      },
+      "secondary": {
+        "name": "Legal Paper",
+        "hex": "#f8fafc",
+        "tailwind": "slate-50",
+        "usage": "Page backgrounds, secondary containers"
+      },
+      "accent": {
+        "name": "Electric Blue",
+        "hex": "#2563eb",
+        "tailwind": "blue-600",
+        "usage": "Links, focus rings, active tab indicators"
+      },
+      "status": {
+        "paid": { "bg": "bg-emerald-100", "text": "text-emerald-800", "border": "border-emerald-200" },
+        "late": { "bg": "bg-rose-100", "text": "text-rose-800", "border": "border-rose-200" },
+        "near": { "bg": "bg-amber-100", "text": "text-amber-800", "border": "border-amber-200" },
+        "breached": { "bg": "bg-slate-100", "text": "text-slate-600", "border": "border-slate-200" }
+      },
+      "background": "#ffffff",
+      "foreground": "#0f172a"
+    },
+    "typography": {
+      "headings": {
+        "family": "Manrope",
+        "weights": ["600", "700", "800"],
+        "usage": "Page titles, Card headers, KPIs"
+      },
+      "body": {
+        "family": "Inter",
+        "weights": ["400", "500"],
+        "usage": "General text, table data"
+      },
+      "mono": {
+        "family": "JetBrains Mono",
+        "usage": "Financial values, dates, IDs"
+      }
+    }
+  },
+  "layout_strategy": {
+    "dashboard": "Mode B: High Density Grid (Bento)",
+    "grid_config": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4",
+    "spacing": {
+      "container_padding": "p-6 md:p-8",
+      "element_gap": "gap-4",
+      "section_gap": "gap-8"
+    },
+    "containers": {
+      "card": "bg-white border border-slate-200 shadow-sm rounded-lg p-6",
+      "table_container": "rounded-md border border-slate-200 overflow-hidden"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-slate-900 text-white hover:bg-slate-800 shadow-sm rounded-md px-4 py-2 font-medium transition-all",
+      "secondary": "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 shadow-sm rounded-md px-4 py-2 font-medium transition-all",
+      "ghost": "hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-md px-3 py-2"
+    },
+    "inputs": {
+      "default": "flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    },
+    "badges": {
+      "base": "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2",
+      "variants": {
+        "default": "border-transparent bg-slate-900 text-slate-50 hover:bg-slate-900/80",
+        "secondary": "border-transparent bg-slate-100 text-slate-900 hover:bg-slate-100/80",
+        "outline": "text-slate-950"
+      }
+    }
+  },
+  "visual_assets": {
+    "login_background": "https://images.unsplash.com/photo-1549791084-5f78368b208b?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "empty_state_abstract": "https://images.unsplash.com/photo-1550423732-a322236d2ff8?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "icons": "lucide-react"
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Use 'Manrope' for all headings. Import it from Google Fonts.",
+    "CRITICAL: For financial tables, use 'JetBrains Mono' or 'tabular-nums' class for alignment.",
+    "CRITICAL: Implement the 'Status' logic strictly. Status colors must be consistent across the app.",
+    "CRITICAL: Use the 'Bento Grid' layout for the Dashboard. Do not just stack cards vertically.",
+    "CRITICAL: Ensure all interactive elements have 'data-testid' attributes.",
+    "CRITICAL: Use 'sonner' for all toast notifications.",
+    "CRITICAL: Do not use gradients for backgrounds. Use solid colors or subtle noise textures if needed.",
+    "CRITICAL: For the 'Timeline' view, use a vertical line with nodes. Do not use a horizontal scroll.",
+    "CRITICAL: The 'Import' feature should have a clear drag-and-drop zone with validation feedback."
+  ],
+  "universal_guidelines": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) sparingly (e.g., sticky headers).",
+    "You MUST NOT apply universal transition. Eg: 'transition: all'. This results in breaking transforms.",
+    "You MUST NOT center align the app container.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠 etc for icons."
+  ]
+}
