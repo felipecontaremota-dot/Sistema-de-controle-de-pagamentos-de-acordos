@@ -242,22 +242,17 @@ def calculate_installment_status(due_date_str: str, paid_date: Optional[str]) ->
 async def calculate_case_total_received(case_id: str) -> float:
     total = 0.0
     
-    # Soma de parcelas pagas
+    # Soma de parcelas pagas (incluindo entrada não-alvará)
     installments = await db.installments.find({"paid_date": {"$ne": None}}, {"_id": 0}).to_list(1000)
     for inst in installments:
         agreement = await db.agreements.find_one({"id": inst["agreement_id"]}, {"_id": 0})
         if agreement and agreement["case_id"] == case_id:
             total += inst.get("paid_value", 0)
     
-    # Soma de alvarás
-    alvaras = await db.alvaras.find({"case_id": case_id}, {"_id": 0}).to_list(1000)
+    # Soma de alvarás PAGOS apenas
+    alvaras = await db.alvaras.find({"case_id": case_id, "status_alvara": "Alvará pago"}, {"_id": 0}).to_list(1000)
     for alvara in alvaras:
         total += alvara.get("valor_alvara", 0)
-    
-    # Soma de entrada (se não for via alvará, pois se for via alvará já está contabilizado acima)
-    agreement = await db.agreements.find_one({"case_id": case_id}, {"_id": 0})
-    if agreement and agreement.get("has_entry") and not agreement.get("entry_via_alvara"):
-        total += agreement.get("entry_value", 0)
     
     return total
 
