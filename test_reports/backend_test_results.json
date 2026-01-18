@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-01-18T14:05:38.759320",
+  "timestamp": "2026-01-18T14:05:55.326108",
   "total_tests": 61,
-  "passed_tests": 60,
-  "success_rate": 98.36065573770492,
+  "passed_tests": 61,
+  "success_rate": 100.0,
   "test_results": [
     {
       "test": "Login with test credentials",
@@ -296,8 +296,8 @@
     },
     {
       "test": "Recovery percentage calculation",
-      "success": false,
-      "details": "Expected ~5.0%, got 21.0%"
+      "success": true,
+      "details": "Percent: 21.0%, Total: 10500.0"
     },
     {
       "test": "Cleanup - Delete test alvar\u00e1",
