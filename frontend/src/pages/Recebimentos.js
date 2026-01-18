@@ -324,15 +324,26 @@ export default function Recebimentos({ token, setToken }) {
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-slate-200 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-slate-900">Recebimentos Detalhados</h3>
-                <Button
-                  onClick={exportToCSV}
-                  variant="outline"
-                  size="sm"
-                  data-testid="export-csv-button"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar CSV
-                </Button>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={exportToPDF}
+                    variant="outline"
+                    size="sm"
+                    data-testid="export-pdf-button"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Gerar PDF
+                  </Button>
+                  <Button
+                    onClick={exportToCSV}
+                    variant="outline"
+                    size="sm"
+                    data-testid="export-csv-button"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Exportar CSV
+                  </Button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full" data-testid="receipts-table">
