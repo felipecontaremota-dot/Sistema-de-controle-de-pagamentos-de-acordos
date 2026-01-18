@@ -536,15 +536,22 @@ export default function CaseDetail({ token, setToken }) {
                                   />
                                 </div>
                                 <div>
-                                  <Label htmlFor="entry_date">Data da entrada *</Label>
+                                  <Label htmlFor="entry_date">
+                                    Data da entrada {agreementForm.entry_via_alvara ? '(opcional)' : '*'}
+                                  </Label>
                                   <Input
                                     id="entry_date"
                                     type="date"
                                     value={agreementForm.entry_date}
                                     onChange={(e) => setAgreementForm({ ...agreementForm, entry_date: e.target.value })}
-                                    required={agreementForm.has_entry}
+                                    required={agreementForm.has_entry && !agreementForm.entry_via_alvara}
                                     data-testid="entry-date-input"
                                   />
+                                  {agreementForm.entry_via_alvara && (
+                                    <p className="text-xs text-slate-500 mt-1">
+                                      Aguardando liberação judicial
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex items-center space-x-2">
