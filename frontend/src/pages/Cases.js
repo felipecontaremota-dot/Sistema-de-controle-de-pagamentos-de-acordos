@@ -7,8 +7,9 @@ import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, Search, LogOut, Scale, Filter, DollarSign } from 'lucide-react';
+import { Plus, Search, LogOut, Scale, Filter, DollarSign, Trash2 } from 'lucide-react';
 import { formatDateBR, formatCurrency } from '../utils/formatters';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
