@@ -317,25 +317,36 @@ export default function CaseDetail({ token, setToken }) {
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center space-x-3 h-16">
-            <Button
-              onClick={() => navigate('/cases')}
-              variant="ghost"
-              className="hover:bg-slate-100"
-              data-testid="back-button"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Voltar
-            </Button>
+          <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-3">
-              <Scale className="w-8 h-8 text-slate-900" />
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">{data.case.debtor_name}</h1>
-                {data.case.numero_processo && (
-                  <p className="text-xs text-slate-500 font-mono">Processo: {data.case.numero_processo}</p>
-                )}
+              <Button
+                onClick={() => navigate('/cases')}
+                variant="ghost"
+                className="hover:bg-slate-100"
+                data-testid="back-button"
+              >
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                Voltar
+              </Button>
+              <div className="flex items-center space-x-3">
+                <Scale className="w-8 h-8 text-slate-900" />
+                <div>
+                  <h1 className="text-xl font-bold text-slate-900">{data.case.debtor_name}</h1>
+                  {data.case.numero_processo && (
+                    <p className="text-xs text-slate-500 font-mono">Processo: {data.case.numero_processo}</p>
+                  )}
+                </div>
               </div>
             </div>
+            <Button
+              onClick={() => setDeleteCaseDialogOpen(true)}
+              variant="outline"
+              className="text-rose-600 hover:bg-rose-50 border-rose-200"
+              data-testid="delete-case-button"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Excluir Caso
+            </Button>
           </div>
         </div>
       </nav>
