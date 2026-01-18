@@ -232,20 +232,22 @@ export default function Cases({ token, setToken }) {
                     </div>
                     <div>
                       <Label htmlFor="cpf">CPF</Label>
-                      <InputMask
-                        mask="999.999.999-99"
+                      <Input
+                        id="cpf"
                         value={formData.cpf}
-                        onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                      >
-                        {(inputProps) => (
-                          <Input
-                            {...inputProps}
-                            id="cpf"
-                            placeholder="000.000.000-00"
-                            data-testid="cpf-input"
-                          />
-                        )}
-                      </InputMask>
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          const formatted = value
+                            .replace(/(\d{3})(\d)/, '$1.$2')
+                            .replace(/(\d{3})(\d)/, '$1.$2')
+                            .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+                            .replace(/(-\d{2})\d+?$/, '$1');
+                          setFormData({ ...formData, cpf: formatted });
+                        }}
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                        data-testid="cpf-input"
+                      />
                     </div>
                     <div>
                       <Label htmlFor="internal_id">ID interno</Label>
