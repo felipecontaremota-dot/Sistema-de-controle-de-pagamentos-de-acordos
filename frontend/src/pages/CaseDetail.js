@@ -7,8 +7,11 @@ import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Scale, FileText, Calendar, DollarSign } from 'lucide-react';
+import { ArrowLeft, Plus, Scale, FileText, Calendar, DollarSign, Pencil, Trash2, AlertCircle } from 'lucide-react';
+import { formatDateBR, formatCurrency } from '../utils/formatters';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -19,17 +22,37 @@ export default function CaseDetail({ token, setToken }) {
   const [loading, setLoading] = useState(false);
   const [agreementDialogOpen, setAgreementDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [alvaraDialogOpen, setAlvaraDialogOpen] = useState(false);
+  const [editAlvaraDialogOpen, setEditAlvaraDialogOpen] = useState(false);
+  const [deleteAlvaraDialogOpen, setDeleteAlvaraDialogOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState(null);
+  const [selectedAlvara, setSelectedAlvara] = useState(null);
+  const [alvaraToDelete, setAlvaraToDelete] = useState(null);
+  
   const [agreementForm, setAgreementForm] = useState({
     total_value: '',
     installments_count: '',
     installment_value: '',
     first_due_date: '',
+    has_entry: false,
+    entry_value: '',
+    entry_via_alvara: false,
+    entry_date: '',
   });
+  
   const [paymentForm, setPaymentForm] = useState({
     paid_date: '',
     paid_value: '',
+    due_date: '',
   });
+  
+  const [alvaraForm, setAlvaraForm] = useState({
+    data_alvara: '',
+    valor_alvara: '',
+    beneficiario_codigo: '31',
+    observacoes: '',
+  });
+  
   const navigate = useNavigate();
 
   const fetchCaseDetail = async () => {
@@ -52,6 +75,37 @@ export default function CaseDetail({ token, setToken }) {
     fetchCaseDetail();
   }, [id]);
 
+  // Cálculo automático do valor da parcela
+  useEffect(() => {
+    const { total_value, installments_count, has_entry, entry_value } = agreementForm;
+    
+    if (total_value && installments_count && parseFloat(total_value) > 0 && parseInt(installments_count) > 0) {
+      const totalValue = parseFloat(total_value);
+      const entryVal = has_entry && entry_value ? parseFloat(entry_value) : 0;
+      const baseValue = totalValue - entryVal;
+      const installmentVal = baseValue / parseInt(installments_count);
+      
+      setAgreementForm(prev => ({
+        ...prev,
+        installment_value: installmentVal.toFixed(2)
+      }));
+    }
+  }, [agreementForm.total_value, agreementForm.installments_count, agreementForm.has_entry, agreementForm.entry_value]);
+
+  // Calcular data da primeira parcela automaticamente quando há entrada
+  useEffect(() => {
+    if (agreementForm.has_entry && agreementForm.entry_date) {
+      const entryDate = new Date(agreementForm.entry_date);
+      entryDate.setMonth(entryDate.getMonth() + 1);
+      const firstDueDate = entryDate.toISOString().split('T')[0];
+      
+      setAgreementForm(prev => ({
+        ...prev,
+        first_due_date: firstDueDate
+      }));
+    }
+  }, [agreementForm.has_entry, agreementForm.entry_date]);
+
   const handleCreateAgreement = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -61,21 +115,19 @@ export default function CaseDetail({ token, setToken }) {
         `${API}/agreements`,
         {
           case_id: id,
-          ...agreementForm,
           total_value: parseFloat(agreementForm.total_value),
           installments_count: parseInt(agreementForm.installments_count),
           installment_value: parseFloat(agreementForm.installment_value),
+          first_due_date: agreementForm.first_due_date,
+          has_entry: agreementForm.has_entry,
+          entry_value: agreementForm.has_entry ? parseFloat(agreementForm.entry_value) : null,
+          entry_via_alvara: agreementForm.entry_via_alvara,
+          entry_date: agreementForm.has_entry ? agreementForm.entry_date : null,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success('Acordo criado com sucesso!');
       setAgreementDialogOpen(false);
-      setAgreementForm({
-        total_value: '',
-        installments_count: '',
-        installment_value: '',
-        first_due_date: '',
-      });
       fetchCaseDetail();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Erro ao criar acordo');
@@ -94,16 +146,89 @@ export default function CaseDetail({ token, setToken }) {
         {
           paid_date: paymentForm.paid_date,
           paid_value: parseFloat(paymentForm.paid_value),
+          due_date: paymentForm.due_date,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success('Parcela atualizada com sucesso!');
       setPaymentDialogOpen(false);
-      setPaymentForm({ paid_date: '', paid_value: '' });
+      setPaymentForm({ paid_date: '', paid_value: '', due_date: '' });
       setSelectedInstallment(null);
       fetchCaseDetail();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Erro ao atualizar parcela');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateAlvara = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      await axios.post(
+        `${API}/alvaras`,
+        {
+          case_id: id,
+          ...alvaraForm,
+          valor_alvara: parseFloat(alvaraForm.valor_alvara),
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Alvará cadastrado com sucesso!');
+      setAlvaraDialogOpen(false);
+      setAlvaraForm({
+        data_alvara: '',
+        valor_alvara: '',
+        beneficiario_codigo: '31',
+        observacoes: '',
+      });
+      fetchCaseDetail();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao cadastrar alvará');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateAlvara = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      await axios.put(
+        `${API}/alvaras/${selectedAlvara.id}`,
+        {
+          ...alvaraForm,
+          valor_alvara: parseFloat(alvaraForm.valor_alvara),
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Alvará atualizado com sucesso!');
+      setEditAlvaraDialogOpen(false);
+      setSelectedAlvara(null);
+      fetchCaseDetail();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao atualizar alvará');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAlvara = async () => {
+    setLoading(true);
+
+    try {
+      await axios.delete(`${API}/alvaras/${alvaraToDelete.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success('Alvará excluído com sucesso!');
+      setDeleteAlvaraDialogOpen(false);
+      setAlvaraToDelete(null);
+      fetchCaseDetail();
+    } catch (error) {
+      toast.error('Erro ao excluir alvará');
     } finally {
       setLoading(false);
     }
@@ -135,6 +260,8 @@ export default function CaseDetail({ token, setToken }) {
     );
   }
 
+  const totalAlvaras = data.alvaras.reduce((sum, alv) => sum + alv.valor_alvara, 0);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-white border-b border-slate-200">
@@ -151,7 +278,12 @@ export default function CaseDetail({ token, setToken }) {
             </Button>
             <div className="flex items-center space-x-3">
               <Scale className="w-8 h-8 text-slate-900" />
-              <h1 className="text-xl font-bold text-slate-900">{data.case.debtor_name}</h1>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900">{data.case.debtor_name}</h1>
+                {data.case.numero_processo && (
+                  <p className="text-xs text-slate-500 font-mono">Processo: {data.case.numero_processo}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -165,7 +297,7 @@ export default function CaseDetail({ token, setToken }) {
               <h3 className="text-sm font-semibold text-slate-600">Valor da Causa</h3>
             </div>
             <p className="text-2xl font-bold text-slate-900 font-mono">
-              R$ {data.case.value_causa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              {formatCurrency(data.case.value_causa)}
             </p>
           </div>
 
@@ -175,7 +307,7 @@ export default function CaseDetail({ token, setToken }) {
               <h3 className="text-sm font-semibold text-slate-600">Total Recebido</h3>
             </div>
             <p className="text-2xl font-bold text-emerald-600 font-mono">
-              R$ {data.total_received.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              {formatCurrency(data.total_received)}
             </p>
           </div>
 
@@ -200,6 +332,7 @@ export default function CaseDetail({ token, setToken }) {
           <TabsList className="bg-white border border-slate-200" data-testid="tabs-list">
             <TabsTrigger value="acordo" data-testid="tab-acordo">Acordo</TabsTrigger>
             <TabsTrigger value="parcelas" data-testid="tab-parcelas">Parcelas</TabsTrigger>
+            <TabsTrigger value="alvara" data-testid="tab-alvara">Alvará Judicial</TabsTrigger>
             <TabsTrigger value="resumo" data-testid="tab-resumo">Resumo</TabsTrigger>
           </TabsList>
 
@@ -212,7 +345,7 @@ export default function CaseDetail({ token, setToken }) {
                     <div>
                       <p className="text-sm text-slate-600">Valor total</p>
                       <p className="text-lg font-semibold text-slate-900 font-mono">
-                        R$ {data.agreement.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(data.agreement.total_value)}
                       </p>
                     </div>
                     <div>
@@ -222,13 +355,34 @@ export default function CaseDetail({ token, setToken }) {
                     <div>
                       <p className="text-sm text-slate-600">Valor da parcela</p>
                       <p className="text-lg font-semibold text-slate-900 font-mono">
-                        R$ {data.agreement.installment_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(data.agreement.installment_value)}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-600">Data da 1ª parcela</p>
-                      <p className="text-lg font-semibold text-slate-900">{data.agreement.first_due_date}</p>
+                      <p className="text-lg font-semibold text-slate-900">{formatDateBR(data.agreement.first_due_date)}</p>
                     </div>
+                    {data.agreement.has_entry && (
+                      <>
+                        <div>
+                          <p className="text-sm text-slate-600">Entrada</p>
+                          <p className="text-lg font-semibold text-emerald-600 font-mono">
+                            {formatCurrency(data.agreement.entry_value)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-slate-600">Data da entrada</p>
+                          <p className="text-lg font-semibold text-slate-900">{formatDateBR(data.agreement.entry_date)}</p>
+                        </div>
+                        {data.agreement.entry_via_alvara && (
+                          <div className="col-span-2">
+                            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                              Entrada via Alvará Judicial
+                            </Badge>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -241,62 +395,139 @@ export default function CaseDetail({ token, setToken }) {
                         Criar Acordo
                       </Button>
                     </DialogTrigger>
-                    <DialogContent data-testid="create-agreement-dialog">
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="create-agreement-dialog">
                       <DialogHeader>
                         <DialogTitle>Criar Acordo</DialogTitle>
                         <DialogDescription>Configure o acordo judicial com parcelas mensais</DialogDescription>
                       </DialogHeader>
                       <form onSubmit={handleCreateAgreement} className="space-y-4">
-                        <div>
-                          <Label htmlFor="total_value">Valor total do acordo *</Label>
-                          <Input
-                            id="total_value"
-                            type="number"
-                            step="0.01"
-                            value={agreementForm.total_value}
-                            onChange={(e) => setAgreementForm({ ...agreementForm, total_value: e.target.value })}
-                            required
-                            data-testid="total-value-input"
-                          />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="total_value">Valor total do acordo *</Label>
+                            <Input
+                              id="total_value"
+                              type="number"
+                              step="0.01"
+                              value={agreementForm.total_value}
+                              onChange={(e) => setAgreementForm({ ...agreementForm, total_value: e.target.value })}
+                              required
+                              data-testid="total-value-input"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="installments_count">Número de parcelas *</Label>
+                            <Input
+                              id="installments_count"
+                              type="number"
+                              value={agreementForm.installments_count}
+                              onChange={(e) =>
+                                setAgreementForm({ ...agreementForm, installments_count: e.target.value })
+                              }
+                              required
+                              data-testid="installments-count-input"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <Label htmlFor="installments_count">Número de parcelas *</Label>
-                          <Input
-                            id="installments_count"
-                            type="number"
-                            value={agreementForm.installments_count}
-                            onChange={(e) =>
-                              setAgreementForm({ ...agreementForm, installments_count: e.target.value })
-                            }
-                            required
-                            data-testid="installments-count-input"
-                          />
+
+                        <div className="border-t pt-4">
+                          <div className="flex items-center space-x-2 mb-3">
+                            <Label htmlFor="has_entry">Há pagamento de entrada?</Label>
+                            <Select
+                              value={agreementForm.has_entry ? 'sim' : 'nao'}
+                              onValueChange={(value) => setAgreementForm({ ...agreementForm, has_entry: value === 'sim' })}
+                            >
+                              <SelectTrigger className="w-32" data-testid="has-entry-select">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="nao">Não</SelectItem>
+                                <SelectItem value="sim">Sim</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {agreementForm.has_entry && (
+                            <div className="space-y-4 bg-slate-50 p-4 rounded-lg">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <Label htmlFor="entry_value">Valor da entrada *</Label>
+                                  <Input
+                                    id="entry_value"
+                                    type="number"
+                                    step="0.01"
+                                    value={agreementForm.entry_value}
+                                    onChange={(e) => setAgreementForm({ ...agreementForm, entry_value: e.target.value })}
+                                    required={agreementForm.has_entry}
+                                    data-testid="entry-value-input"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="entry_date">Data da entrada *</Label>
+                                  <Input
+                                    id="entry_date"
+                                    type="date"
+                                    value={agreementForm.entry_date}
+                                    onChange={(e) => setAgreementForm({ ...agreementForm, entry_date: e.target.value })}
+                                    required={agreementForm.has_entry}
+                                    data-testid="entry-date-input"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id="entry_via_alvara"
+                                  checked={agreementForm.entry_via_alvara}
+                                  onChange={(e) => setAgreementForm({ ...agreementForm, entry_via_alvara: e.target.checked })}
+                                  className="rounded"
+                                  data-testid="entry-via-alvara-checkbox"
+                                />
+                                <Label htmlFor="entry_via_alvara" className="cursor-pointer">
+                                  Entrada via Alvará Judicial
+                                </Label>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <Label htmlFor="installment_value">Valor da parcela *</Label>
-                          <Input
-                            id="installment_value"
-                            type="number"
-                            step="0.01"
-                            value={agreementForm.installment_value}
-                            onChange={(e) =>
-                              setAgreementForm({ ...agreementForm, installment_value: e.target.value })
-                            }
-                            required
-                            data-testid="installment-value-input"
-                          />
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="installment_value">Valor da parcela (calculado)</Label>
+                            <Input
+                              id="installment_value"
+                              type="number"
+                              step="0.01"
+                              value={agreementForm.installment_value}
+                              onChange={(e) =>
+                                setAgreementForm({ ...agreementForm, installment_value: e.target.value })
+                              }
+                              required
+                              className="bg-slate-50"
+                              data-testid="installment-value-input"
+                            />
+                            <p className="text-xs text-amber-600 mt-1 flex items-center">
+                              <AlertCircle className="w-3 h-3 mr-1" />
+                              Valor calculado automaticamente
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor="first_due_date">Data da 1ª parcela *</Label>
+                            <Input
+                              id="first_due_date"
+                              type="date"
+                              value={agreementForm.first_due_date}
+                              onChange={(e) => setAgreementForm({ ...agreementForm, first_due_date: e.target.value })}
+                              required
+                              data-testid="first-due-date-input"
+                            />
+                            {agreementForm.has_entry && agreementForm.entry_date && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                Gerada automaticamente (entrada + 1 mês)
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <Label htmlFor="first_due_date">Data da 1ª parcela *</Label>
-                          <Input
-                            id="first_due_date"
-                            type="date"
-                            value={agreementForm.first_due_date}
-                            onChange={(e) => setAgreementForm({ ...agreementForm, first_due_date: e.target.value })}
-                            required
-                            data-testid="first-due-date-input"
-                          />
-                        </div>
+
                         <Button type="submit" className="w-full" disabled={loading} data-testid="submit-agreement-button">
                           {loading ? 'Criando...' : 'Criar Acordo'}
                         </Button>
@@ -339,76 +570,84 @@ export default function CaseDetail({ token, setToken }) {
                       {data.installments.map((inst) => (
                         <tr key={inst.id} className="table-row" data-testid={`installment-row-${inst.id}`}>
                           <td className="px-6 py-4 font-medium text-slate-900">#{inst.number}</td>
-                          <td className="px-6 py-4 font-mono text-slate-900">{inst.due_date}</td>
+                          <td className="px-6 py-4 font-mono text-slate-900">{formatDateBR(inst.due_date)}</td>
                           <td className="px-6 py-4 font-mono text-slate-900">
-                            {inst.paid_date || <span className="text-slate-400">-</span>}
+                            {inst.paid_date ? formatDateBR(inst.paid_date) : <span className="text-slate-400">-</span>}
                           </td>
                           <td className="px-6 py-4 font-mono text-slate-900">
-                            {inst.paid_value ? (
-                              `R$ ${inst.paid_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
+                            {inst.paid_value ? formatCurrency(inst.paid_value) : <span className="text-slate-400">-</span>}
                           </td>
                           <td className="px-6 py-4">{getStatusBadge(inst.status_calc)}</td>
                           <td className="px-6 py-4">
-                            {inst.status_calc !== 'Pago' && (
-                              <Dialog open={paymentDialogOpen && selectedInstallment?.id === inst.id} onOpenChange={(open) => {
+                            <Dialog
+                              open={paymentDialogOpen && selectedInstallment?.id === inst.id}
+                              onOpenChange={(open) => {
                                 setPaymentDialogOpen(open);
                                 if (!open) setSelectedInstallment(null);
-                              }}>
-                                <DialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setSelectedInstallment(inst);
-                                      setPaymentForm({
-                                        paid_date: '',
-                                        paid_value: data.agreement?.installment_value || '',
-                                      });
-                                    }}
-                                    data-testid={`mark-paid-button-${inst.id}`}
-                                  >
-                                    Marcar como pago
+                              }}
+                            >
+                              <DialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedInstallment(inst);
+                                    setPaymentForm({
+                                      paid_date: inst.paid_date || '',
+                                      paid_value: inst.paid_value || data.agreement?.installment_value || '',
+                                      due_date: inst.due_date,
+                                    });
+                                  }}
+                                  data-testid={`edit-installment-${inst.id}`}
+                                >
+                                  <Pencil className="w-4 h-4 mr-1" />
+                                  Editar
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent data-testid="payment-dialog">
+                                <DialogHeader>
+                                  <DialogTitle>Editar Parcela #{inst.number}</DialogTitle>
+                                  <DialogDescription>Informe a data e o valor do pagamento recebido</DialogDescription>
+                                </DialogHeader>
+                                <form onSubmit={handleMarkAsPaid} className="space-y-4">
+                                  <div>
+                                    <Label htmlFor="due_date">Data de vencimento</Label>
+                                    <Input
+                                      id="due_date"
+                                      type="date"
+                                      value={paymentForm.due_date}
+                                      onChange={(e) => setPaymentForm({ ...paymentForm, due_date: e.target.value })}
+                                      disabled={inst.status_calc === 'Pago'}
+                                      data-testid="due-date-input"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor="paid_date">Data do pagamento</Label>
+                                    <Input
+                                      id="paid_date"
+                                      type="date"
+                                      value={paymentForm.paid_date}
+                                      onChange={(e) => setPaymentForm({ ...paymentForm, paid_date: e.target.value })}
+                                      data-testid="paid-date-input"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor="paid_value">Valor pago</Label>
+                                    <Input
+                                      id="paid_value"
+                                      type="number"
+                                      step="0.01"
+                                      value={paymentForm.paid_value}
+                                      onChange={(e) => setPaymentForm({ ...paymentForm, paid_value: e.target.value })}
+                                      data-testid="paid-value-input"
+                                    />
+                                  </div>
+                                  <Button type="submit" className="w-full" disabled={loading} data-testid="submit-payment-button">
+                                    {loading ? 'Salvando...' : 'Salvar'}
                                   </Button>
-                                </DialogTrigger>
-                                <DialogContent data-testid="payment-dialog">
-                                  <DialogHeader>
-                                    <DialogTitle>Registrar Pagamento - Parcela #{inst.number}</DialogTitle>
-                                    <DialogDescription>Informe a data e o valor do pagamento recebido</DialogDescription>
-                                  </DialogHeader>
-                                  <form onSubmit={handleMarkAsPaid} className="space-y-4">
-                                    <div>
-                                      <Label htmlFor="paid_date">Data do pagamento *</Label>
-                                      <Input
-                                        id="paid_date"
-                                        type="date"
-                                        value={paymentForm.paid_date}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, paid_date: e.target.value })}
-                                        required
-                                        data-testid="paid-date-input"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label htmlFor="paid_value">Valor pago *</Label>
-                                      <Input
-                                        id="paid_value"
-                                        type="number"
-                                        step="0.01"
-                                        value={paymentForm.paid_value}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, paid_value: e.target.value })}
-                                        required
-                                        data-testid="paid-value-input"
-                                      />
-                                    </div>
-                                    <Button type="submit" className="w-full" disabled={loading} data-testid="submit-payment-button">
-                                      {loading ? 'Salvando...' : 'Salvar Pagamento'}
-                                    </Button>
-                                  </form>
-                                </DialogContent>
-                              </Dialog>
-                            )}
+                                </form>
+                              </DialogContent>
+                            </Dialog>
                           </td>
                         </tr>
                       ))}
@@ -418,6 +657,230 @@ export default function CaseDetail({ token, setToken }) {
               ) : (
                 <div className="text-center py-12" data-testid="no-installments">
                   <p className="text-slate-500">Nenhuma parcela encontrada. Crie um acordo primeiro.</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="alvara" data-testid="alvara-tab-content">
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Alvarás Judiciais</h3>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Total de alvarás: <span className="font-mono font-semibold text-emerald-600">{formatCurrency(totalAlvaras)}</span>
+                  </p>
+                </div>
+                <Dialog open={alvaraDialogOpen} onOpenChange={setAlvaraDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-slate-900 hover:bg-slate-800" data-testid="create-alvara-button">
+                      <Plus className="w-5 h-5 mr-2" />
+                      Novo Alvará
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent data-testid="create-alvara-dialog">
+                    <DialogHeader>
+                      <DialogTitle>Cadastrar Alvará Judicial</DialogTitle>
+                      <DialogDescription>Registre um novo alvará judicial recebido</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateAlvara} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="data_alvara">Data do alvará *</Label>
+                          <Input
+                            id="data_alvara"
+                            type="date"
+                            value={alvaraForm.data_alvara}
+                            onChange={(e) => setAlvaraForm({ ...alvaraForm, data_alvara: e.target.value })}
+                            required
+                            data-testid="data-alvara-input"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="valor_alvara">Valor do alvará *</Label>
+                          <Input
+                            id="valor_alvara"
+                            type="number"
+                            step="0.01"
+                            value={alvaraForm.valor_alvara}
+                            onChange={(e) => setAlvaraForm({ ...alvaraForm, valor_alvara: e.target.value })}
+                            required
+                            data-testid="valor-alvara-input"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="beneficiario_codigo">Beneficiário *</Label>
+                        <Select
+                          value={alvaraForm.beneficiario_codigo}
+                          onValueChange={(value) => setAlvaraForm({ ...alvaraForm, beneficiario_codigo: value })}
+                        >
+                          <SelectTrigger data-testid="beneficiario-select">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="31">31</SelectItem>
+                            <SelectItem value="14">14</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="observacoes">Observações</Label>
+                        <Input
+                          id="observacoes"
+                          value={alvaraForm.observacoes}
+                          onChange={(e) => setAlvaraForm({ ...alvaraForm, observacoes: e.target.value })}
+                          data-testid="observacoes-input"
+                        />
+                      </div>
+                      <Button type="submit" className="w-full" disabled={loading} data-testid="submit-alvara-button">
+                        {loading ? 'Salvando...' : 'Cadastrar Alvará'}
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              {data.alvaras && data.alvaras.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full" data-testid="alvaras-table">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                          Data
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                          Valor
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                          Beneficiário
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                          Observações
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {data.alvaras.map((alvara) => (
+                        <tr key={alvara.id} className="table-row" data-testid={`alvara-row-${alvara.id}`}>
+                          <td className="px-6 py-4 font-mono text-slate-900">{formatDateBR(alvara.data_alvara)}</td>
+                          <td className="px-6 py-4 font-mono text-emerald-600 font-semibold">
+                            {formatCurrency(alvara.valor_alvara)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge className="bg-slate-900 text-white">{alvara.beneficiario_codigo}</Badge>
+                          </td>
+                          <td className="px-6 py-4 text-slate-700">{alvara.observacoes || '-'}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex space-x-2">
+                              <Dialog
+                                open={editAlvaraDialogOpen && selectedAlvara?.id === alvara.id}
+                                onOpenChange={(open) => {
+                                  setEditAlvaraDialogOpen(open);
+                                  if (!open) setSelectedAlvara(null);
+                                }}
+                              >
+                                <DialogTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedAlvara(alvara);
+                                      setAlvaraForm({
+                                        data_alvara: alvara.data_alvara,
+                                        valor_alvara: alvara.valor_alvara,
+                                        beneficiario_codigo: alvara.beneficiario_codigo,
+                                        observacoes: alvara.observacoes || '',
+                                      });
+                                    }}
+                                    data-testid={`edit-alvara-${alvara.id}`}
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Editar Alvará</DialogTitle>
+                                    <DialogDescription>Atualize os dados do alvará judicial</DialogDescription>
+                                  </DialogHeader>
+                                  <form onSubmit={handleUpdateAlvara} className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Label htmlFor="edit_data_alvara">Data do alvará *</Label>
+                                        <Input
+                                          id="edit_data_alvara"
+                                          type="date"
+                                          value={alvaraForm.data_alvara}
+                                          onChange={(e) => setAlvaraForm({ ...alvaraForm, data_alvara: e.target.value })}
+                                          required
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label htmlFor="edit_valor_alvara">Valor do alvará *</Label>
+                                        <Input
+                                          id="edit_valor_alvara"
+                                          type="number"
+                                          step="0.01"
+                                          value={alvaraForm.valor_alvara}
+                                          onChange={(e) => setAlvaraForm({ ...alvaraForm, valor_alvara: e.target.value })}
+                                          required
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <Label htmlFor="edit_beneficiario_codigo">Beneficiário *</Label>
+                                      <Select
+                                        value={alvaraForm.beneficiario_codigo}
+                                        onValueChange={(value) => setAlvaraForm({ ...alvaraForm, beneficiario_codigo: value })}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="31">31</SelectItem>
+                                          <SelectItem value="14">14</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <Label htmlFor="edit_observacoes">Observações</Label>
+                                      <Input
+                                        id="edit_observacoes"
+                                        value={alvaraForm.observacoes}
+                                        onChange={(e) => setAlvaraForm({ ...alvaraForm, observacoes: e.target.value })}
+                                      />
+                                    </div>
+                                    <Button type="submit" className="w-full" disabled={loading}>
+                                      {loading ? 'Salvando...' : 'Atualizar'}
+                                    </Button>
+                                  </form>
+                                </DialogContent>
+                              </Dialog>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-rose-600 hover:bg-rose-50"
+                                onClick={() => {
+                                  setAlvaraToDelete(alvara);
+                                  setDeleteAlvaraDialogOpen(true);
+                                }}
+                                data-testid={`delete-alvara-${alvara.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12" data-testid="no-alvaras">
+                  <p className="text-slate-500">Nenhum alvará cadastrado ainda.</p>
                 </div>
               )}
             </div>
@@ -435,22 +898,34 @@ export default function CaseDetail({ token, setToken }) {
                       <dt className="text-sm text-slate-600">Devedor</dt>
                       <dd className="text-base font-medium text-slate-900">{data.case.debtor_name}</dd>
                     </div>
-                    {data.case.internal_id && (
+                    {data.case.cpf && (
                       <div>
-                        <dt className="text-sm text-slate-600">ID Interno</dt>
-                        <dd className="text-base font-medium text-slate-900 font-mono">{data.case.internal_id}</dd>
+                        <dt className="text-sm text-slate-600">CPF</dt>
+                        <dd className="text-base font-medium text-slate-900 font-mono">{data.case.cpf}</dd>
+                      </div>
+                    )}
+                    {data.case.numero_processo && (
+                      <div>
+                        <dt className="text-sm text-slate-600">Número do Processo</dt>
+                        <dd className="text-base font-medium text-slate-900 font-mono">{data.case.numero_processo}</dd>
+                      </div>
+                    )}
+                    {data.case.status_processo && (
+                      <div>
+                        <dt className="text-sm text-slate-600">Status do Processo</dt>
+                        <dd><Badge variant="outline">{data.case.status_processo}</Badge></dd>
+                      </div>
+                    )}
+                    {data.case.curso && (
+                      <div>
+                        <dt className="text-sm text-slate-600">Curso</dt>
+                        <dd className="text-base text-slate-700">{data.case.curso}</dd>
                       </div>
                     )}
                     <div>
                       <dt className="text-sm text-slate-600">Polo Ativo</dt>
                       <dd className="text-base font-medium text-slate-900">{data.case.polo_ativo_text}</dd>
                     </div>
-                    {data.case.notes && (
-                      <div>
-                        <dt className="text-sm text-slate-600">Observações</dt>
-                        <dd className="text-base text-slate-700">{data.case.notes}</dd>
-                      </div>
-                    )}
                   </dl>
                 </div>
 
@@ -460,25 +935,33 @@ export default function CaseDetail({ token, setToken }) {
                     <div>
                       <dt className="text-sm text-slate-600">Valor da Causa</dt>
                       <dd className="text-base font-medium text-slate-900 font-mono">
-                        R$ {data.case.value_causa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(data.case.value_causa)}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-sm text-slate-600">Total Recebido</dt>
                       <dd className="text-base font-medium text-emerald-600 font-mono">
-                        R$ {data.total_received.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(data.total_received)}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-sm text-slate-600">Saldo Restante</dt>
                       <dd className="text-base font-medium text-slate-900 font-mono">
-                        R$ {(data.case.value_causa - data.total_received).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(data.case.value_causa - data.total_received)}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-sm text-slate-600">% Recuperado</dt>
                       <dd className="text-base font-medium text-slate-900">{data.percent_recovered}%</dd>
                     </div>
+                    {data.alvaras && data.alvaras.length > 0 && (
+                      <div>
+                        <dt className="text-sm text-slate-600">Total de Alvarás</dt>
+                        <dd className="text-base font-medium text-emerald-600 font-mono">
+                          {formatCurrency(totalAlvaras)}
+                        </dd>
+                      </div>
+                    )}
                   </dl>
                 </div>
               </div>
@@ -518,6 +1001,23 @@ export default function CaseDetail({ token, setToken }) {
           </TabsContent>
         </Tabs>
       </main>
+
+      <AlertDialog open={deleteAlvaraDialogOpen} onOpenChange={setDeleteAlvaraDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este alvará? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAlvara} className="bg-rose-600 hover:bg-rose-700">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
