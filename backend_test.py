@@ -178,6 +178,17 @@ class JudicialAgreementTester:
             200
         )
         
+        if not success:
+            return False
+        
+        # Test status_processo filter
+        success, response = self.run_test(
+            "Filter cases by status_processo",
+            "GET",
+            "cases?status_processo=Execução",
+            200
+        )
+        
         return success
 
     def test_get_case_detail(self):
