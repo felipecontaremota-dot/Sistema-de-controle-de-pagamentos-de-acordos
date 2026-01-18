@@ -103,13 +103,19 @@ class JudicialAgreementTester:
         return success
 
     def test_create_case(self):
-        """Test creating a new case"""
+        """Test creating a new case with FASE 2 fields"""
         case_data = {
             "debtor_name": "João Silva Teste",
             "internal_id": "CASE-TEST-001",
             "value_causa": 50000.00,
             "polo_ativo_text": "Banco 31 - Conta principal",
-            "notes": "Caso de teste para automação"
+            "notes": "Caso de teste para automação",
+            "numero_processo": "1234567-89.2024.8.26.0001",
+            "data_protocolo": "2024-01-15",
+            "status_processo": "Execução",
+            "data_matricula": "2024-01-10",
+            "cpf": "123.456.789-00",
+            "curso": "Direito"
         }
         
         success, response = self.run_test(
