@@ -33,6 +33,8 @@ export default function Cases({ token, setToken }) {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCase, setEditingCase] = useState(null);
+  const [deleteCaseDialogOpen, setDeleteCaseDialogOpen] = useState(false);
+  const [caseToDelete, setCaseToDelete] = useState(null);
   const [formData, setFormData] = useState({
     debtor_name: '',
     internal_id: '',
