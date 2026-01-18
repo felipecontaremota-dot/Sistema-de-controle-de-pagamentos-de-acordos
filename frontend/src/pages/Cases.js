@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import InputMask from 'react-input-mask';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -8,24 +9,43 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Search, LogOut, Scale, Filter } from 'lucide-react';
+import { Plus, Search, LogOut, Scale, Filter, DollarSign } from 'lucide-react';
+import { formatDateBR, formatCurrency } from '../utils/formatters';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+const STATUS_PROCESSO_OPTIONS = [
+  'Execução',
+  'Cobrança',
+  'Cumprimento de Sentença',
+  'Aguardando Alvará',
+  'Acordo',
+  'Sucesso',
+  'Extinto'
+];
 
 export default function Cases({ token, setToken }) {
   const [cases, setCases] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [beneficiaryFilter, setBeneficiaryFilter] = useState('');
+  const [statusProcessoFilter, setStatusProcessoFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingCase, setEditingCase] = useState(null);
   const [formData, setFormData] = useState({
     debtor_name: '',
     internal_id: '',
     value_causa: '',
     polo_ativo_text: '',
     notes: '',
+    numero_processo: '',
+    data_protocolo: '',
+    status_processo: '',
+    data_matricula: '',
+    cpf: '',
+    curso: '',
   });
   const navigate = useNavigate();
 
@@ -35,6 +55,7 @@ export default function Cases({ token, setToken }) {
       if (search) params.append('search', search);
       if (statusFilter && statusFilter !== 'all') params.append('status_acordo', statusFilter);
       if (beneficiaryFilter && beneficiaryFilter !== 'all') params.append('beneficiario', beneficiaryFilter);
+      if (statusProcessoFilter && statusProcessoFilter !== 'all') params.append('status_processo', statusProcessoFilter);
 
       const response = await axios.get(`${API}/cases?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -52,33 +73,70 @@ export default function Cases({ token, setToken }) {
 
   useEffect(() => {
     fetchCases();
-  }, [search, statusFilter, beneficiaryFilter]);
+  }, [search, statusFilter, beneficiaryFilter, statusProcessoFilter]);
 
-  const handleCreateCase = async (e) => {
+  const openCreateDialog = () => {
+    setEditingCase(null);
+    setFormData({
+      debtor_name: '',
+      internal_id: '',
+      value_causa: '',
+      polo_ativo_text: '',
+      notes: '',
+      numero_processo: '',
+      data_protocolo: '',
+      status_processo: '',
+      data_matricula: '',
+      cpf: '',
+      curso: '',
+    });
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (caseData) => {
+    setEditingCase(caseData);
+    setFormData({
+      debtor_name: caseData.debtor_name || '',
+      internal_id: caseData.internal_id || '',
+      value_causa: caseData.value_causa || '',
+      polo_ativo_text: caseData.polo_ativo_text || '',
+      notes: caseData.notes || '',
+      numero_processo: caseData.numero_processo || '',
+      data_protocolo: caseData.data_protocolo || '',
+      status_processo: caseData.status_processo || '',
+      data_matricula: caseData.data_matricula || '',
+      cpf: caseData.cpf || '',
+      curso: caseData.curso || '',
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      await axios.post(
-        `${API}/cases`,
-        {
-          ...formData,
-          value_causa: parseFloat(formData.value_causa),
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success('Caso criado com sucesso!');
+      const payload = {
+        ...formData,
+        value_causa: parseFloat(formData.value_causa),
+      };
+
+      if (editingCase) {
+        await axios.put(`${API}/cases/${editingCase.id}`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success('Caso atualizado com sucesso!');
+      } else {
+        await axios.post(`${API}/cases`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success('Caso criado com sucesso!');
+      }
+
       setDialogOpen(false);
-      setFormData({
-        debtor_name: '',
-        internal_id: '',
-        value_causa: '',
-        polo_ativo_text: '',
-        notes: '',
-      });
       fetchCases();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao criar caso');
+      toast.error(error.response?.data?.detail || 'Erro ao salvar caso');
     } finally {
       setLoading(false);
     }
@@ -118,15 +176,26 @@ export default function Cases({ token, setToken }) {
               <Scale className="w-8 h-8 text-slate-900" />
               <h1 className="text-xl font-bold text-slate-900">Acordos Judiciais</h1>
             </div>
-            <Button
-              onClick={handleLogout}
-              variant="ghost"
-              className="hover:bg-slate-100"
-              data-testid="logout-button"
-            >
-              <LogOut className="w-5 h-5 mr-2" />
-              Sair
-            </Button>
+            <div className="flex items-center space-x-4">
+              <Button
+                onClick={() => navigate('/recebimentos')}
+                variant="outline"
+                className="hover:bg-slate-100"
+                data-testid="recebimentos-button"
+              >
+                <DollarSign className="w-5 h-5 mr-2" />
+                Recebimentos
+              </Button>
+              <Button
+                onClick={handleLogout}
+                variant="ghost"
+                className="hover:bg-slate-100"
+                data-testid="logout-button"
+              >
+                <LogOut className="w-5 h-5 mr-2" />
+                Sair
+              </Button>
+            </div>
           </div>
         </div>
       </nav>
@@ -140,59 +209,147 @@ export default function Cases({ token, setToken }) {
             </div>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-slate-900 hover:bg-slate-800" data-testid="create-case-button">
+                <Button className="bg-slate-900 hover:bg-slate-800" onClick={openCreateDialog} data-testid="create-case-button">
                   <Plus className="w-5 h-5 mr-2" />
                   Novo Caso
                 </Button>
               </DialogTrigger>
-              <DialogContent data-testid="create-case-dialog">
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="create-case-dialog">
                 <DialogHeader>
-                  <DialogTitle>Criar Novo Caso</DialogTitle>
-                  <DialogDescription>Preencha os dados do novo caso judicial</DialogDescription>
+                  <DialogTitle>{editingCase ? 'Editar Caso' : 'Criar Novo Caso'}</DialogTitle>
+                  <DialogDescription>Preencha os dados do caso judicial</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleCreateCase} className="space-y-4">
-                  <div>
-                    <Label htmlFor="debtor_name">Nome do devedor *</Label>
-                    <Input
-                      id="debtor_name"
-                      value={formData.debtor_name}
-                      onChange={(e) => setFormData({ ...formData, debtor_name: e.target.value })}
-                      required
-                      data-testid="debtor-name-input"
-                    />
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <Label htmlFor="debtor_name">Nome do devedor *</Label>
+                      <Input
+                        id="debtor_name"
+                        value={formData.debtor_name}
+                        onChange={(e) => setFormData({ ...formData, debtor_name: e.target.value })}
+                        required
+                        data-testid="debtor-name-input"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="cpf">CPF</Label>
+                      <InputMask
+                        mask="999.999.999-99"
+                        value={formData.cpf}
+                        onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                      >
+                        {(inputProps) => (
+                          <Input
+                            {...inputProps}
+                            id="cpf"
+                            placeholder="000.000.000-00"
+                            data-testid="cpf-input"
+                          />
+                        )}
+                      </InputMask>
+                    </div>
+                    <div>
+                      <Label htmlFor="internal_id">ID interno</Label>
+                      <Input
+                        id="internal_id"
+                        value={formData.internal_id}
+                        onChange={(e) => setFormData({ ...formData, internal_id: e.target.value })}
+                        data-testid="internal-id-input"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="internal_id">ID interno</Label>
-                    <Input
-                      id="internal_id"
-                      value={formData.internal_id}
-                      onChange={(e) => setFormData({ ...formData, internal_id: e.target.value })}
-                      data-testid="internal-id-input"
-                    />
+
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold text-slate-900 mb-3">Dados do Processo</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="numero_processo">Número do processo</Label>
+                        <Input
+                          id="numero_processo"
+                          value={formData.numero_processo}
+                          onChange={(e) => setFormData({ ...formData, numero_processo: e.target.value })}
+                          data-testid="numero-processo-input"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="status_processo">Status do processo *</Label>
+                        <Select
+                          value={formData.status_processo}
+                          onValueChange={(value) => setFormData({ ...formData, status_processo: value })}
+                        >
+                          <SelectTrigger data-testid="status-processo-select">
+                            <SelectValue placeholder="Selecione o status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STATUS_PROCESSO_OPTIONS.map((status) => (
+                              <SelectItem key={status} value={status}>
+                                {status}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="data_protocolo">Data do protocolo</Label>
+                        <Input
+                          id="data_protocolo"
+                          type="date"
+                          value={formData.data_protocolo}
+                          onChange={(e) => setFormData({ ...formData, data_protocolo: e.target.value })}
+                          data-testid="data-protocolo-input"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="data_matricula">Data da matrícula</Label>
+                        <Input
+                          id="data_matricula"
+                          type="date"
+                          value={formData.data_matricula}
+                          onChange={(e) => setFormData({ ...formData, data_matricula: e.target.value })}
+                          data-testid="data-matricula-input"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="curso">Curso</Label>
+                        <Input
+                          id="curso"
+                          value={formData.curso}
+                          onChange={(e) => setFormData({ ...formData, curso: e.target.value })}
+                          data-testid="curso-input"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="value_causa">Valor da causa *</Label>
-                    <Input
-                      id="value_causa"
-                      type="number"
-                      step="0.01"
-                      value={formData.value_causa}
-                      onChange={(e) => setFormData({ ...formData, value_causa: e.target.value })}
-                      required
-                      data-testid="value-causa-input"
-                    />
+
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold text-slate-900 mb-3">Dados Financeiros</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="value_causa">Valor da causa *</Label>
+                        <Input
+                          id="value_causa"
+                          type="number"
+                          step="0.01"
+                          value={formData.value_causa}
+                          onChange={(e) => setFormData({ ...formData, value_causa: e.target.value })}
+                          required
+                          data-testid="value-causa-input"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="polo_ativo_text">Polo ativo (beneficiário) *</Label>
+                        <Input
+                          id="polo_ativo_text"
+                          value={formData.polo_ativo_text}
+                          onChange={(e) => setFormData({ ...formData, polo_ativo_text: e.target.value })}
+                          placeholder="Ex: Banco 31 - Conta principal"
+                          required
+                          data-testid="polo-ativo-input"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="polo_ativo_text">Polo ativo (beneficiário) *</Label>
-                    <Input
-                      id="polo_ativo_text"
-                      value={formData.polo_ativo_text}
-                      onChange={(e) => setFormData({ ...formData, polo_ativo_text: e.target.value })}
-                      placeholder="Ex: Banco 31 - Conta principal"
-                      required
-                      data-testid="polo-ativo-input"
-                    />
-                  </div>
+
                   <div>
                     <Label htmlFor="notes">Observações</Label>
                     <Input
@@ -202,8 +359,9 @@ export default function Cases({ token, setToken }) {
                       data-testid="notes-input"
                     />
                   </div>
+
                   <Button type="submit" className="w-full" disabled={loading} data-testid="submit-case-button">
-                    {loading ? 'Criando...' : 'Criar Caso'}
+                    {loading ? 'Salvando...' : editingCase ? 'Atualizar Caso' : 'Criar Caso'}
                   </Button>
                 </form>
               </DialogContent>
@@ -215,7 +373,7 @@ export default function Cases({ token, setToken }) {
               <Filter className="w-5 h-5 text-slate-600" />
               <h3 className="font-semibold text-slate-900">Filtros</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="search">Buscar por devedor</Label>
                 <div className="relative mt-1">
@@ -259,6 +417,22 @@ export default function Cases({ token, setToken }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label htmlFor="status-processo-filter">Status do processo</Label>
+                <Select value={statusProcessoFilter || undefined} onValueChange={setStatusProcessoFilter}>
+                  <SelectTrigger className="mt-1" data-testid="status-processo-filter">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {STATUS_PROCESSO_OPTIONS.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </div>
@@ -269,7 +443,10 @@ export default function Cases({ token, setToken }) {
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Devedor
+                    Devedor / Processo
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                    Status Processo
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Valor da Causa
@@ -284,7 +461,10 @@ export default function Cases({ token, setToken }) {
                     % Recuperado
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Status
+                    Status Acordo
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                    Ações
                   </th>
                 </tr>
               </thead>
@@ -292,20 +472,30 @@ export default function Cases({ token, setToken }) {
                 {cases.map((case_) => (
                   <tr
                     key={case_.id}
-                    onClick={() => navigate(`/cases/${case_.id}`)}
                     className="table-row cursor-pointer"
+                    onClick={() => navigate(`/cases/${case_.id}`)}
                     data-testid={`case-row-${case_.id}`}
                   >
                     <td className="px-6 py-4">
                       <div>
                         <div className="font-medium text-slate-900">{case_.debtor_name}</div>
+                        {case_.numero_processo && (
+                          <div className="text-xs text-slate-500 font-mono">Proc: {case_.numero_processo}</div>
+                        )}
                         {case_.internal_id && (
                           <div className="text-xs text-slate-500 font-mono">ID: {case_.internal_id}</div>
                         )}
                       </div>
                     </td>
+                    <td className="px-6 py-4">
+                      {case_.status_processo ? (
+                        <Badge variant="outline" className="text-xs">{case_.status_processo}</Badge>
+                      ) : (
+                        <span className="text-slate-400 text-xs">-</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 font-mono text-slate-900">
-                      R$ {case_.value_causa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(case_.value_causa)}
                     </td>
                     <td className="px-6 py-4">
                       {case_.polo_ativo_codigo ? (
@@ -315,7 +505,7 @@ export default function Cases({ token, setToken }) {
                       )}
                     </td>
                     <td className="px-6 py-4 font-mono text-slate-900">
-                      R$ {case_.total_received.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(case_.total_received)}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
@@ -329,6 +519,19 @@ export default function Cases({ token, setToken }) {
                       </div>
                     </td>
                     <td className="px-6 py-4">{getStatusBadge(case_.status_acordo)}</td>
+                    <td className="px-6 py-4">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditDialog(case_);
+                        }}
+                        data-testid={`edit-case-${case_.id}`}
+                      >
+                        Editar
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
