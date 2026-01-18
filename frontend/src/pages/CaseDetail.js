@@ -236,6 +236,55 @@ export default function CaseDetail({ token, setToken }) {
     }
   };
 
+  const handleDeleteCase = async () => {
+    setLoading(true);
+
+    try {
+      await axios.delete(`${API}/cases/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success('Caso excluído com sucesso!');
+      navigate('/cases');
+    } catch (error) {
+      toast.error('Erro ao excluir caso');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAgreement = async () => {
+    setLoading(true);
+
+    try {
+      await axios.delete(`${API}/agreements/${data.agreement.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success('Acordo excluído com sucesso!');
+      setDeleteAgreementDialogOpen(false);
+      fetchCaseDetail();
+    } catch (error) {
+      toast.error('Erro ao excluir acordo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleAlvaraStatus = async (alvara) => {
+    const newStatus = alvara.status_alvara === 'Aguardando alvará' ? 'Alvará pago' : 'Aguardando alvará';
+    
+    try {
+      await axios.put(
+        `${API}/alvaras/${alvara.id}`,
+        { status_alvara: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(`Status alterado para: ${newStatus}`);
+      fetchCaseDetail();
+    } catch (error) {
+      toast.error('Erro ao atualizar status do alvará');
+    }
+  };
+
   const getStatusBadge = (status) => {
     const statusConfig = {
       Pago: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
