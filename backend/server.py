@@ -858,35 +858,7 @@ async def get_receipts(
                             total_14 += valor_alvara
                         case_ids_with_receipts.add(case["id"])
     
-    # Entrada (se não for via alvará)
-    if not type or type == "all" or type == "entrada":
-        agreements = await db.agreements.find({"has_entry": True, "entry_via_alvara": False}, {"_id": 0}).to_list(10000)
-        for agreement in agreements:
-            entry_date = agreement.get("entry_date")
-            if entry_date and (not start_date or entry_date >= start_date) and (not end_date or entry_date <= end_date):
-                if agreement["case_id"] in case_map:
-                    case = case_map[agreement["case_id"]]
-                    beneficiario_codigo = case.get("polo_ativo_codigo")
-                    
-                    if not beneficiario or beneficiario == "all" or beneficiario_codigo == beneficiario:
-                        entry_value = agreement.get("entry_value", 0)
-                        receipts.append({
-                            "date": entry_date,
-                            "case_id": case["id"],
-                            "debtor": case["debtor_name"],
-                            "numero_processo": case.get("numero_processo", ""),
-                            "type": "Entrada",
-                            "value": entry_value,
-                            "beneficiario": beneficiario_codigo or "",
-                            "observacoes": "Entrada do acordo"
-                        })
-                        total_received += entry_value
-                        total_parcelas += entry_value
-                        if beneficiario_codigo == "31":
-                            total_31 += entry_value
-                        elif beneficiario_codigo == "14":
-                            total_14 += entry_value
-                        case_ids_with_receipts.add(case["id"])
+    # Entrada agora é tratada como parcela especial (removido)
     
     receipts.sort(key=lambda x: x["date"], reverse=True)
     
