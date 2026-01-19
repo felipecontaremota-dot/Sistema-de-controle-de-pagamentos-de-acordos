@@ -7,8 +7,8 @@ import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { Scale } from 'lucide-react';
 
-const BACKEND_URL = process.env.REACT_APP_API_URL || 'https://legacord-backend.onrender.com';
-const API = `${BACKEND_URL.replace(/\/$/,''}/api`;
+const BACKEND_URL = (process.env.REACT_APP_API_URL || "https://legacord-backend.onrender.com").replace(/\/$/, "");
+const API = `${BACKEND_URL}/api`;
 
 export default function Login({ setToken }) {
   const [isLogin, setIsLogin] = useState(true);
