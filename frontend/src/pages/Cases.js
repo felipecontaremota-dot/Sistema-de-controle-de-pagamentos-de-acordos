@@ -1,7 +1,7 @@
-import { api } from "../lib/api";
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from "../lib/api";
+
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -11,10 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Plus, Search, LogOut, Scale, Filter, DollarSign, Trash2 } from 'lucide-react';
-import { formatDateBR, formatCurrency } from '../utils/formatters';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { formatCurrency } from '../utils/formatters';
 
 const STATUS_PROCESSO_OPTIONS = [
   'Execução',
@@ -37,6 +34,7 @@ export default function Cases({ token, setToken }) {
   const [editingCase, setEditingCase] = useState(null);
   const [deleteCaseDialogOpen, setDeleteCaseDialogOpen] = useState(false);
   const [caseToDelete, setCaseToDelete] = useState(null);
+
   const [formData, setFormData] = useState({
     debtor_name: '',
     internal_id: '',
@@ -50,7 +48,13 @@ export default function Cases({ token, setToken }) {
     cpf: '',
     curso: '',
   });
+
   const navigate = useNavigate();
+
+  const handleUnauthorized = () => {
+    setToken(null);
+    navigate('/login');
+  };
 
   const fetchCases = async () => {
     try {
@@ -60,14 +64,14 @@ export default function Cases({ token, setToken }) {
       if (beneficiaryFilter && beneficiaryFilter !== 'all') params.append('beneficiario', beneficiaryFilter);
       if (statusProcessoFilter && statusProcessoFilter !== 'all') params.append('status_processo', statusProcessoFilter);
 
-      const response = await axios.get(`${API}/cases?${params.toString()}`, {
+      const response = await api.get(`/cases?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       setCases(response.data);
     } catch (error) {
       if (error.response?.status === 401) {
-        setToken(null);
-        navigate('/login');
+        handleUnauthorized();
       } else {
         toast.error('Erro ao carregar casos');
       }
@@ -76,6 +80,7 @@ export default function Cases({ token, setToken }) {
 
   useEffect(() => {
     fetchCases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, statusFilter, beneficiaryFilter, statusProcessoFilter]);
 
   const openCreateDialog = () => {
@@ -125,12 +130,12 @@ export default function Cases({ token, setToken }) {
       };
 
       if (editingCase) {
-        await axios.put(`${API}/cases/${editingCase.id}`, payload, {
+        await api.put(`/cases/${editingCase.id}`, payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
         toast.success('Caso atualizado com sucesso!');
       } else {
-        await axios.post(`${API}/cases`, payload, {
+        await api.post(`/cases`, payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
         toast.success('Caso criado com sucesso!');
@@ -139,7 +144,11 @@ export default function Cases({ token, setToken }) {
       setDialogOpen(false);
       fetchCases();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao salvar caso');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error(error.response?.data?.detail || 'Erro ao salvar caso');
+      }
     } finally {
       setLoading(false);
     }
@@ -149,7 +158,7 @@ export default function Cases({ token, setToken }) {
     setLoading(true);
 
     try {
-      await axios.delete(`${API}/cases/${caseToDelete.id}`, {
+      await api.delete(`/cases/${caseToDelete.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.success('Caso excluído com sucesso!');
@@ -157,7 +166,11 @@ export default function Cases({ token, setToken }) {
       setCaseToDelete(null);
       fetchCases();
     } catch (error) {
-      toast.error('Erro ao excluir caso');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error('Erro ao excluir caso');
+      }
     } finally {
       setLoading(false);
     }
@@ -228,6 +241,7 @@ export default function Cases({ token, setToken }) {
               <h2 className="text-3xl font-bold text-slate-900">Casos</h2>
               <p className="text-sm text-slate-600 mt-1">Gerencie seus casos e acordos judiciais</p>
             </div>
+
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-slate-900 hover:bg-slate-800" onClick={openCreateDialog} data-testid="create-case-button">
@@ -235,11 +249,13 @@ export default function Cases({ token, setToken }) {
                   Novo Caso
                 </Button>
               </DialogTrigger>
+
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="create-case-dialog">
                 <DialogHeader>
                   <DialogTitle>{editingCase ? 'Editar Caso' : 'Criar Novo Caso'}</DialogTitle>
                   <DialogDescription>Preencha os dados do caso judicial</DialogDescription>
                 </DialogHeader>
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
@@ -252,6 +268,7 @@ export default function Cases({ token, setToken }) {
                         data-testid="debtor-name-input"
                       />
                     </div>
+
                     <div>
                       <Label htmlFor="cpf">CPF</Label>
                       <Input
@@ -271,6 +288,7 @@ export default function Cases({ token, setToken }) {
                         data-testid="cpf-input"
                       />
                     </div>
+
                     <div>
                       <Label htmlFor="internal_id">ID interno</Label>
                       <Input
@@ -294,6 +312,7 @@ export default function Cases({ token, setToken }) {
                           data-testid="numero-processo-input"
                         />
                       </div>
+
                       <div>
                         <Label htmlFor="status_processo">Status do processo *</Label>
                         <Select
@@ -312,6 +331,7 @@ export default function Cases({ token, setToken }) {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div>
                         <Label htmlFor="data_protocolo">Data do protocolo</Label>
                         <Input
@@ -322,6 +342,7 @@ export default function Cases({ token, setToken }) {
                           data-testid="data-protocolo-input"
                         />
                       </div>
+
                       <div>
                         <Label htmlFor="data_matricula">Data da matrícula</Label>
                         <Input
@@ -332,6 +353,7 @@ export default function Cases({ token, setToken }) {
                           data-testid="data-matricula-input"
                         />
                       </div>
+
                       <div>
                         <Label htmlFor="curso">Curso</Label>
                         <Input
@@ -359,6 +381,7 @@ export default function Cases({ token, setToken }) {
                           data-testid="value-causa-input"
                         />
                       </div>
+
                       <div>
                         <Label htmlFor="polo_ativo_text">Polo ativo (beneficiário) *</Label>
                         <Input
@@ -396,6 +419,7 @@ export default function Cases({ token, setToken }) {
               <Filter className="w-5 h-5 text-slate-600" />
               <h3 className="font-semibold text-slate-900">Filtros</h3>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="search">Buscar por devedor</Label>
@@ -411,6 +435,7 @@ export default function Cases({ token, setToken }) {
                   />
                 </div>
               </div>
+
               <div>
                 <Label htmlFor="status-filter">Status do acordo</Label>
                 <Select value={statusFilter || undefined} onValueChange={setStatusFilter}>
@@ -427,6 +452,7 @@ export default function Cases({ token, setToken }) {
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <Label htmlFor="beneficiary-filter">Beneficiário</Label>
                 <Select value={beneficiaryFilter || undefined} onValueChange={setBeneficiaryFilter}>
@@ -440,6 +466,7 @@ export default function Cases({ token, setToken }) {
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <Label htmlFor="status-processo-filter">Status do processo</Label>
                 <Select value={statusProcessoFilter || undefined} onValueChange={setStatusProcessoFilter}>
@@ -491,6 +518,7 @@ export default function Cases({ token, setToken }) {
                   </th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-slate-200">
                 {cases.map((case_) => (
                   <tr
@@ -510,12 +538,13 @@ export default function Cases({ token, setToken }) {
                         )}
                       </div>
                     </td>
+
                     <td className="px-6 py-4">
                       {case_.status_processo ? (
-                        <Badge 
-                          variant="outline" 
+                        <Badge
+                          variant="outline"
                           className={
-                            case_.status_processo === 'Extinto' 
+                            case_.status_processo === 'Extinto'
                               ? 'bg-black text-white border-black'
                               : case_.status_processo === 'Acordo'
                               ? 'bg-amber-100 text-amber-800 border-amber-200'
@@ -530,9 +559,11 @@ export default function Cases({ token, setToken }) {
                         <span className="text-slate-400 text-xs">-</span>
                       )}
                     </td>
+
                     <td className="px-6 py-4 font-mono text-slate-900">
                       {formatCurrency(case_.value_causa)}
                     </td>
+
                     <td className="px-6 py-4">
                       {case_.polo_ativo_codigo ? (
                         <Badge className="bg-slate-900 text-white">{case_.polo_ativo_codigo}</Badge>
@@ -540,9 +571,11 @@ export default function Cases({ token, setToken }) {
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
+
                     <td className="px-6 py-4 font-mono text-slate-900">
                       {formatCurrency(case_.total_received)}
                     </td>
+
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
                         <div className="flex-1 bg-slate-200 rounded-full h-2 max-w-[80px]">
@@ -554,7 +587,9 @@ export default function Cases({ token, setToken }) {
                         <span className="text-sm font-medium text-slate-700">{case_.percent_recovered}%</span>
                       </div>
                     </td>
+
                     <td className="px-6 py-4">{getStatusBadge(case_.status_acordo)}</td>
+
                     <td className="px-6 py-4">
                       <div className="flex space-x-2">
                         <Button
@@ -568,6 +603,7 @@ export default function Cases({ token, setToken }) {
                         >
                           Editar
                         </Button>
+
                         <Button
                           size="sm"
                           variant="outline"
@@ -588,6 +624,7 @@ export default function Cases({ token, setToken }) {
               </tbody>
             </table>
           </div>
+
           {cases.length === 0 && (
             <div className="text-center py-12" data-testid="empty-state">
               <p className="text-slate-500">Nenhum caso encontrado</p>
@@ -605,6 +642,7 @@ export default function Cases({ token, setToken }) {
               todas as parcelas e alvarás vinculados. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteCase} className="bg-rose-600 hover:bg-rose-700">
