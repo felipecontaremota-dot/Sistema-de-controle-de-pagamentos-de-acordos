@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -11,8 +13,12 @@ import { ArrowLeft, Scale, DollarSign, TrendingUp, FileText, Download } from 'lu
 import { formatDateBR, formatCurrency } from '../utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const API_BASE =
+  process.env.REACT_APP_API_URL ||
+  process.env.REACT_APP_BACKEND_URL ||
+  '';
+
+const API = `${API_BASE}/api`;
 
 export default function Recebimentos({ token, setToken }) {
   const [data, setData] = useState(null);
