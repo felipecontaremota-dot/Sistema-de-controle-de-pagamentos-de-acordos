@@ -7,7 +7,7 @@ const BACKEND_URL = (
 
 export const API_BASE = `${BACKEND_URL}/api`;
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: API_BASE,
 });
 
@@ -38,5 +38,3 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-export default api;
