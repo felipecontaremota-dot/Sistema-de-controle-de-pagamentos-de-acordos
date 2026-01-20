@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Cases from './pages/Cases';
 import CaseDetail from './pages/CaseDetail';
 import Recebimentos from './pages/Recebimentos';
+import Import from './pages/Import';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
 
@@ -51,6 +52,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Recebimentos token={token} setToken={setToken} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/import"
+            element={
+              <ProtectedRoute>
+                <Import token={token} setToken={setToken} />
               </ProtectedRoute>
             }
           />
