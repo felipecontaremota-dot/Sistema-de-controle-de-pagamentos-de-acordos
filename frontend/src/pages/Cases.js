@@ -183,13 +183,19 @@ export default function Cases({ token, setToken }) {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      Quitado: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
-      'Em andamento': { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
-      'Em atraso': { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' },
-      Descumprido: { bg: 'bg-black', text: 'text-white', border: 'border-black' },
-      'Dia de pagamento': { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
-      'Aguardando alvará': { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200' },
-    };
+  Quitado: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
+  'Em andamento': { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
+  'Em atraso': { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' },
+  Descumprido: { bg: 'bg-black', text: 'text-white', border: 'border-black' },
+  'Dia de pagamento': { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
+
+  // 👉 NOVO STATUS
+  'Aguardando alvará': {
+    bg: 'bg-purple-100',
+    text: 'text-purple-800',
+    border: 'border-purple-200',
+  },
+};
 
     const config = statusConfig[status] || statusConfig['Em andamento'];
     return (
