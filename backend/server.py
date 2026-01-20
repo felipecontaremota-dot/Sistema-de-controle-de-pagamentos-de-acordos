@@ -353,8 +353,15 @@ async def get_cases(
             
             if pending_count == 0:
                 status_do_acordo = "Quitado"
-                # Atualizar status_processo para "Sucesso" quando acordo quitado
-                if case.get("status_processo") != "Sucesso":
+                # Verificar situação de alvará antes de marcar sucesso
+                alvaras_case = await db.alvaras.find({"case_id": case_id}, {"_id": 0}).to_list(1000)
+                has_pending_alvara = any(a.get("status_alvara") == "Aguardando alvará" for a in alvaras_case)
+                has_paid_alvara = any(a.get("status_alvara") == "Alvará pago" for a in alvaras_case)
+
+                if has_pending_alvara:
+                    await db.cases.update_one({"id": case_id}, {"$set": {"status_processo": "Aguardando alvará"}})
+                    case["status_processo"] = "Aguardando alvará"
+                elif has_paid_alvara or not alvaras_case:
                     await db.cases.update_one({"id": case_id}, {"$set": {"status_processo": "Sucesso"}})
                     case["status_processo"] = "Sucesso"
             elif has_descumprido:
