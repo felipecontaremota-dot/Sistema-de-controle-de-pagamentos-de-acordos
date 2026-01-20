@@ -8,12 +8,13 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import re
+import pandas as pd
 from pdf_generator import generate_receipts_pdf
 
 ROOT_DIR = Path(__file__).parent
@@ -32,6 +33,12 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
 security = HTTPBearer()
+
+IMPORT_UPLOAD_DIR = ROOT_DIR / "import_uploads"
+IMPORT_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_IMPORT_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+ALLOWED_ALVARA_STATUS = {"Aguardando alvará", "Alvará pago"}
+MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024
 
 
 def hash_password(password: str) -> str:
@@ -210,6 +217,38 @@ class Alvara(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class ImportSession(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    filename: str
+    file_path: str
+    status: str = "uploaded"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ImportMapping(BaseModel):
+    case: Dict[str, Optional[str]] = Field(default_factory=dict)
+    agreement: Dict[str, Optional[str]] = Field(default_factory=dict)
+    installment: Dict[str, Optional[str]] = Field(default_factory=dict)
+    alvara: Dict[str, Optional[str]] = Field(default_factory=dict)
+
+
+class ImportPreviewRequest(BaseModel):
+    session_id: str
+    sample_size: int = 10
+
+
+class ImportValidateRequest(BaseModel):
+    session_id: str
+    mapping: ImportMapping
+
+
+class ImportCommitRequest(BaseModel):
+    session_id: str
+    mapping: ImportMapping
+
+
 def extract_beneficiary_code(text: str) -> Optional[str]:
     if "31" in text:
         return "31"
@@ -257,6 +296,447 @@ async def calculate_case_total_received(case_id: str) -> float:
         total += alvara.get("valor_alvara", 0)
     
     return total
+
+
+def sanitize_filename(filename: str) -> str:
+    return os.path.basename(filename).replace("..", "").strip()
+
+
+def parse_bool(value: Any) -> Optional[bool]:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text == "":
+        return None
+    if text in {"true", "1", "sim", "yes", "y", "t"}:
+        return True
+    if text in {"false", "0", "nao", "não", "no", "n", "f"}:
+        return False
+    return None
+
+
+def parse_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text == "":
+        return None
+    text = text.replace("R$", "").replace(" ", "")
+    if text.count(",") == 1 and text.count(".") >= 1:
+        text = text.replace(".", "").replace(",", ".")
+    elif text.count(",") == 1 and text.count(".") == 0:
+        text = text.replace(",", ".")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def parse_int(value: Any) -> Optional[int]:
+    parsed = parse_float(value)
+    if parsed is None:
+        return None
+    if parsed.is_integer():
+        return int(parsed)
+    return None
+
+
+def parse_date(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text == "":
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
+def load_import_dataframe(file_path: str, filename: str) -> pd.DataFrame:
+    ext = Path(filename).suffix.lower()
+    if ext in {".xls", ".xlsx"}:
+        df = pd.read_excel(file_path, dtype=str)
+    else:
+        df = pd.read_csv(file_path, dtype=str)
+    return df.fillna("")
+
+
+def get_mapped_value(row: pd.Series, column_name: Optional[str]) -> Optional[str]:
+    if not column_name:
+        return None
+    value = row.get(column_name)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text != "" else None
+
+
+def build_case_key(case_data: Dict[str, Any]) -> Optional[str]:
+    for key in ("internal_id", "numero_processo", "cpf", "debtor_name"):
+        value = case_data.get(key)
+        if value:
+            return str(value).strip()
+    return None
+
+
+def has_section_data(row: pd.Series, mapping: Dict[str, Optional[str]]) -> bool:
+    for column_name in mapping.values():
+        if column_name and get_mapped_value(row, column_name):
+            return True
+    return False
+
+
+def generate_installments_for_agreement(agreement_id: str, agreement_data: AgreementCreate) -> List[Installment]:
+    installments: List[Installment] = []
+
+    if agreement_data.has_entry and agreement_data.entry_date:
+        entry_date = datetime.strptime(agreement_data.entry_date, "%Y-%m-%d")
+        if entry_date.month == 12:
+            first_due = entry_date.replace(year=entry_date.year + 1, month=1)
+        else:
+            first_due = entry_date.replace(month=entry_date.month + 1)
+    else:
+        first_due = datetime.strptime(agreement_data.first_due_date, "%Y-%m-%d")
+
+    for i in range(agreement_data.installments_count):
+        year = first_due.year
+        month = first_due.month + i
+        day = first_due.day
+
+        while month > 12:
+            month -= 12
+            year += 1
+
+        try:
+            due_date = datetime(year, month, day)
+        except ValueError:
+            if month == 12:
+                next_month = datetime(year + 1, 1, 1)
+            else:
+                next_month = datetime(year, month + 1, 1)
+            due_date = next_month - timedelta(days=1)
+
+        installments.append(
+            Installment(
+                agreement_id=agreement_id,
+                number=i + 1,
+                due_date=due_date.strftime("%Y-%m-%d"),
+                is_entry=False
+            )
+        )
+
+    return installments
+
+
+def build_entry_installment(agreement_id: str, agreement_data: AgreementCreate) -> Optional[Installment]:
+    if agreement_data.has_entry and not agreement_data.entry_via_alvara:
+        return Installment(
+            agreement_id=agreement_id,
+            number=0,
+            due_date=agreement_data.entry_date or agreement_data.first_due_date,
+            paid_date=None,
+            paid_value=None,
+            is_entry=True
+        )
+    return None
+
+
+def build_entry_alvara(agreement_data: AgreementCreate, case: Dict[str, Any]) -> Optional[Alvara]:
+    if agreement_data.has_entry and agreement_data.entry_via_alvara and agreement_data.entry_value:
+        return Alvara(
+            case_id=agreement_data.case_id,
+            data_alvara=agreement_data.entry_date,
+            valor_alvara=agreement_data.entry_value,
+            beneficiario_codigo=case.get("polo_ativo_codigo", "31"),
+            observacoes="Entrada via Alvará Judicial",
+            status_alvara="Aguardando alvará"
+        )
+    return None
+
+
+def validate_import_data(
+    df: pd.DataFrame,
+    mapping: ImportMapping
+) -> Dict[str, Any]:
+    errors: List[Dict[str, Any]] = []
+    warnings: List[Dict[str, Any]] = []
+    row_case_keys: Dict[int, str] = {}
+    prepared_cases: Dict[str, Dict[str, Any]] = {}
+    prepared_agreements: Dict[str, Dict[str, Any]] = {}
+    prepared_installments: Dict[str, List[Dict[str, Any]]] = {}
+    prepared_alvaras: Dict[str, List[Dict[str, Any]]] = {}
+
+    required_case_fields = {"debtor_name", "value_causa", "polo_ativo_text"}
+    required_agreement_fields = {"total_value", "installments_count", "installment_value", "first_due_date"}
+    required_installment_fields = {"number", "due_date"}
+    required_alvara_fields = {"valor_alvara", "beneficiario_codigo", "status_alvara"}
+
+    for idx, row in df.iterrows():
+        row_number = idx + 2
+        case_data = {
+            "debtor_name": get_mapped_value(row, mapping.case.get("debtor_name")),
+            "internal_id": get_mapped_value(row, mapping.case.get("internal_id")),
+            "value_causa": get_mapped_value(row, mapping.case.get("value_causa")),
+            "polo_ativo_text": get_mapped_value(row, mapping.case.get("polo_ativo_text")),
+            "notes": get_mapped_value(row, mapping.case.get("notes")),
+            "numero_processo": get_mapped_value(row, mapping.case.get("numero_processo")),
+            "data_protocolo": get_mapped_value(row, mapping.case.get("data_protocolo")),
+            "status_processo": get_mapped_value(row, mapping.case.get("status_processo")),
+            "data_matricula": get_mapped_value(row, mapping.case.get("data_matricula")),
+            "cpf": get_mapped_value(row, mapping.case.get("cpf")),
+            "curso": get_mapped_value(row, mapping.case.get("curso")),
+        }
+
+        missing_case_fields = [field for field in required_case_fields if not case_data.get(field)]
+        if missing_case_fields:
+            errors.append({
+                "row": row_number,
+                "field": "case",
+                "message": f"Campos obrigatórios do caso ausentes: {', '.join(missing_case_fields)}"
+            })
+            continue
+
+        case_data["value_causa"] = parse_float(case_data["value_causa"])
+        if case_data["value_causa"] is None:
+            errors.append({
+                "row": row_number,
+                "field": "case.value_causa",
+                "message": "Valor da causa inválido"
+            })
+            continue
+
+        case_data["data_protocolo"] = parse_date(case_data.get("data_protocolo"))
+        case_data["data_matricula"] = parse_date(case_data.get("data_matricula"))
+
+        if extract_beneficiary_code(case_data.get("polo_ativo_text", "")) is None:
+            warnings.append({
+                "row": row_number,
+                "field": "case.polo_ativo_text",
+                "message": "Não foi possível identificar o beneficiário pelo polo ativo"
+            })
+
+        case_key = build_case_key(case_data)
+        if not case_key:
+            errors.append({
+                "row": row_number,
+                "field": "case",
+                "message": "Não foi possível definir uma chave do caso (use ID interno, nº processo, CPF ou nome)"
+            })
+            continue
+
+        if case_key in prepared_cases:
+            for field, value in case_data.items():
+                existing = prepared_cases[case_key].get(field)
+                if value and existing and value != existing:
+                    errors.append({
+                        "row": row_number,
+                        "field": f"case.{field}",
+                        "message": "Dados conflitantes para o mesmo caso"
+                    })
+        else:
+            prepared_cases[case_key] = case_data
+        row_case_keys[row_number] = case_key
+
+        if has_section_data(row, mapping.agreement):
+            agreement_data = {
+                "total_value": parse_float(get_mapped_value(row, mapping.agreement.get("total_value"))),
+                "installments_count": parse_int(get_mapped_value(row, mapping.agreement.get("installments_count"))),
+                "installment_value": parse_float(get_mapped_value(row, mapping.agreement.get("installment_value"))),
+                "first_due_date": parse_date(get_mapped_value(row, mapping.agreement.get("first_due_date"))),
+                "has_entry": parse_bool(get_mapped_value(row, mapping.agreement.get("has_entry"))) or False,
+                "entry_value": parse_float(get_mapped_value(row, mapping.agreement.get("entry_value"))),
+                "entry_via_alvara": parse_bool(get_mapped_value(row, mapping.agreement.get("entry_via_alvara"))) or False,
+                "entry_date": parse_date(get_mapped_value(row, mapping.agreement.get("entry_date"))),
+            }
+
+            missing_agreement = [
+                field for field in required_agreement_fields
+                if agreement_data.get(field) in (None, "")
+            ]
+            if missing_agreement:
+                errors.append({
+                    "row": row_number,
+                    "field": "agreement",
+                    "message": f"Campos obrigatórios do acordo ausentes: {', '.join(missing_agreement)}"
+                })
+            else:
+                if agreement_data["installments_count"] <= 0:
+                    errors.append({
+                        "row": row_number,
+                        "field": "agreement.installments_count",
+                        "message": "Quantidade de parcelas inválida"
+                    })
+                if agreement_data["total_value"] <= 0 or agreement_data["installment_value"] <= 0:
+                    errors.append({
+                        "row": row_number,
+                        "field": "agreement",
+                        "message": "Valores do acordo devem ser maiores que zero"
+                    })
+
+            if case_key in prepared_agreements:
+                existing = prepared_agreements[case_key]
+                for field, value in agreement_data.items():
+                    existing_value = existing.get(field)
+                    if value is not None and existing_value is not None and value != existing_value:
+                        errors.append({
+                            "row": row_number,
+                            "field": f"agreement.{field}",
+                            "message": "Dados conflitantes para o acordo do mesmo caso"
+                        })
+            else:
+                prepared_agreements[case_key] = agreement_data
+
+        if has_section_data(row, mapping.installment):
+            if case_key not in prepared_agreements:
+                errors.append({
+                    "row": row_number,
+                    "field": "installment",
+                    "message": "Parcela informada sem acordo associado"
+                })
+            installment_data = {
+                "number": parse_int(get_mapped_value(row, mapping.installment.get("number"))),
+                "due_date": parse_date(get_mapped_value(row, mapping.installment.get("due_date"))),
+                "paid_date": parse_date(get_mapped_value(row, mapping.installment.get("paid_date"))),
+                "paid_value": parse_float(get_mapped_value(row, mapping.installment.get("paid_value"))),
+                "is_entry": parse_bool(get_mapped_value(row, mapping.installment.get("is_entry"))) or False
+            }
+
+            missing_installment = [
+                field for field in required_installment_fields
+                if installment_data.get(field) in (None, "")
+            ]
+            if missing_installment:
+                errors.append({
+                    "row": row_number,
+                    "field": "installment",
+                    "message": f"Campos obrigatórios da parcela ausentes: {', '.join(missing_installment)}"
+                })
+            if installment_data["paid_date"] and installment_data["paid_value"] is None:
+                errors.append({
+                    "row": row_number,
+                    "field": "installment.paid_value",
+                    "message": "Parcela com data de pagamento sem valor pago"
+                })
+            if installment_data["paid_value"] is not None and not installment_data["paid_date"]:
+                errors.append({
+                    "row": row_number,
+                    "field": "installment.paid_date",
+                    "message": "Parcela com valor pago sem data de pagamento"
+                })
+
+            prepared_installments.setdefault(case_key, []).append(installment_data)
+
+        if has_section_data(row, mapping.alvara):
+            alvara_data = {
+                "data_alvara": parse_date(get_mapped_value(row, mapping.alvara.get("data_alvara"))),
+                "valor_alvara": parse_float(get_mapped_value(row, mapping.alvara.get("valor_alvara"))),
+                "beneficiario_codigo": get_mapped_value(row, mapping.alvara.get("beneficiario_codigo")),
+                "observacoes": get_mapped_value(row, mapping.alvara.get("observacoes")),
+                "status_alvara": get_mapped_value(row, mapping.alvara.get("status_alvara")) or "Aguardando alvará"
+            }
+
+            missing_alvara = [
+                field for field in required_alvara_fields
+                if not alvara_data.get(field)
+            ]
+            if missing_alvara:
+                errors.append({
+                    "row": row_number,
+                    "field": "alvara",
+                    "message": f"Campos obrigatórios do alvará ausentes: {', '.join(missing_alvara)}"
+                })
+            if alvara_data["status_alvara"] not in ALLOWED_ALVARA_STATUS:
+                errors.append({
+                    "row": row_number,
+                    "field": "alvara.status_alvara",
+                    "message": "Status do alvará inválido"
+                })
+            if alvara_data["beneficiario_codigo"] not in {"31", "14"}:
+                errors.append({
+                    "row": row_number,
+                    "field": "alvara.beneficiario_codigo",
+                    "message": "Beneficiário do alvará inválido"
+                })
+
+            prepared_alvaras.setdefault(case_key, []).append(alvara_data)
+
+    for case_key, agreement in prepared_agreements.items():
+        installments = prepared_installments.get(case_key, [])
+        if not installments:
+            warnings.append({
+                "row": None,
+                "field": "installments",
+                "message": f"Nenhuma parcela informada para o caso {case_key}; o sistema irá gerar parcelas padrão"
+            })
+        else:
+            installment_numbers = {inst["number"] for inst in installments if inst.get("number") is not None}
+            if len(installment_numbers) != len(installments):
+                warnings.append({
+                    "row": None,
+                    "field": "installments.number",
+                    "message": f"Há parcelas duplicadas para o caso {case_key}"
+                })
+            if agreement.get("installments_count") and len(installments) != agreement.get("installments_count"):
+                warnings.append({
+                    "row": None,
+                    "field": "agreement.installments_count",
+                    "message": f"Quantidade de parcelas diferente do acordo para o caso {case_key}"
+                })
+
+        expected_total = agreement.get("installment_value", 0) * agreement.get("installments_count", 0)
+        if agreement.get("has_entry") and agreement.get("entry_value"):
+            expected_total += agreement.get("entry_value")
+        if agreement.get("total_value") is not None and expected_total:
+            if abs(agreement["total_value"] - expected_total) > 0.01:
+                warnings.append({
+                    "row": None,
+                    "field": "agreement.total_value",
+                    "message": f"Soma das parcelas difere do total do acordo para o caso {case_key}"
+                })
+
+        if agreement.get("entry_via_alvara") and agreement.get("entry_value") and not prepared_alvaras.get(case_key):
+            warnings.append({
+                "row": None,
+                "field": "alvara",
+                "message": f"Entrada via alvará sem alvará informado para o caso {case_key}; será criado automaticamente"
+            })
+
+        if installments and agreement.get("installments_count") and len(installments) == agreement.get("installments_count"):
+            if all(inst.get("paid_date") for inst in installments):
+                has_pending_alvara = any(
+                    alvara.get("status_alvara") == "Aguardando alvará"
+                    for alvara in prepared_alvaras.get(case_key, [])
+                )
+                if has_pending_alvara:
+                    warnings.append({
+                        "row": None,
+                        "field": "alvara.status_alvara",
+                        "message": f"Acordo quitado com alvará pendente para o caso {case_key}"
+                    })
+
+    rows_with_errors = {error.get("row") for error in errors if error.get("row")}
+    total_rows = len(df.index)
+    valid_rows = total_rows - len(rows_with_errors)
+
+    return {
+        "errors": errors,
+        "warnings": warnings,
+        "row_case_keys": row_case_keys,
+        "prepared": {
+            "cases": prepared_cases,
+            "agreements": prepared_agreements,
+            "installments": prepared_installments,
+            "alvaras": prepared_alvaras
+        },
+        "summary": {
+            "total_rows": total_rows,
+            "valid_rows": max(valid_rows, 0),
+            "invalid_rows": len(rows_with_errors)
+        }
+    }
 
 
 @api_router.post("/auth/register")
@@ -469,73 +949,22 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
     await db.agreements.insert_one(doc)
     
     # Se entrada NÃO via alvará, criar parcela especial #0 (Entrada) SEMPRE EM ABERTO
-    if agreement_data.has_entry and not agreement_data.entry_via_alvara:
-        entry_installment = Installment(
-            agreement_id=agreement.id,
-            number=0,
-            due_date=agreement_data.entry_date or agreement_data.first_due_date,
-            paid_date=None,  # SEMPRE NONE - usuário deve marcar manualmente
-            paid_value=None,  # SEMPRE NONE - usuário deve marcar manualmente
-            is_entry=True
-        )
+    entry_installment = build_entry_installment(agreement.id, agreement_data)
+    if entry_installment:
         entry_doc = entry_installment.model_dump()
         entry_doc["created_at"] = entry_doc["created_at"].isoformat()
         await db.installments.insert_one(entry_doc)
     
-    # Gerar parcelas regulares com 1 MÊS CALENDÁRIO (não 30 dias)
-    if agreement_data.has_entry and agreement_data.entry_date:
-        entry_date = datetime.strptime(agreement_data.entry_date, "%Y-%m-%d")
-        # Adicionar 1 mês calendário
-        if entry_date.month == 12:
-            first_due = entry_date.replace(year=entry_date.year + 1, month=1)
-        else:
-            first_due = entry_date.replace(month=entry_date.month + 1)
-    else:
-        first_due = datetime.strptime(agreement_data.first_due_date, "%Y-%m-%d")
-    
-    for i in range(agreement_data.installments_count):
-        # Adicionar i meses calendário
-        year = first_due.year
-        month = first_due.month + i
-        day = first_due.day
-        
-        # Ajustar ano e mês se ultrapassar 12
-        while month > 12:
-            month -= 12
-            year += 1
-        
-        # Tentar criar a data, ajustando o dia se necessário
-        try:
-            due_date = datetime(year, month, day)
-        except ValueError:
-            # Dia não existe no mês (ex: 31 em fevereiro), usar último dia do mês
-            if month == 12:
-                next_month = datetime(year + 1, 1, 1)
-            else:
-                next_month = datetime(year, month + 1, 1)
-            due_date = next_month - timedelta(days=1)
-        
-        installment = Installment(
-            agreement_id=agreement.id,
-            number=i + 1,
-            due_date=due_date.strftime("%Y-%m-%d"),
-            is_entry=False
-        )
+    installments = generate_installments_for_agreement(agreement.id, agreement_data)
+    for installment in installments:
         inst_doc = installment.model_dump()
         inst_doc["created_at"] = inst_doc["created_at"].isoformat()
         await db.installments.insert_one(inst_doc)
     
     # Se entrada via alvará, criar registro de alvará automaticamente
-    if agreement_data.has_entry and agreement_data.entry_via_alvara and agreement_data.entry_value:
-        alvara = Alvara(
-            case_id=agreement_data.case_id,
-            data_alvara=agreement_data.entry_date,  # Pode ser None
-            valor_alvara=agreement_data.entry_value,
-            beneficiario_codigo=case.get("polo_ativo_codigo", "31"),
-            observacoes="Entrada via Alvará Judicial",
-            status_alvara="Aguardando alvará"
-        )
-        alvara_doc = alvara.model_dump()
+    entry_alvara = build_entry_alvara(agreement_data, case)
+    if entry_alvara:
+        alvara_doc = entry_alvara.model_dump()
         alvara_doc["created_at"] = alvara_doc["created_at"].isoformat()
         await db.alvaras.insert_one(alvara_doc)
     
@@ -639,6 +1068,318 @@ async def delete_alvara(alvara_id: str, current_user: dict = Depends(get_current
     
     await db.alvaras.delete_one({"id": alvara_id})
     return {"message": "Alvara deleted successfully"}
+
+
+@api_router.post("/import/upload")
+async def upload_import_file(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    filename = sanitize_filename(file.filename or "")
+    if not filename:
+        raise HTTPException(status_code=400, detail="Nome de arquivo inválido")
+
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_IMPORT_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+
+    session = ImportSession(
+        user_id=current_user["id"],
+        filename=filename,
+        file_path=str(IMPORT_UPLOAD_DIR / f"{uuid.uuid4()}{ext}")
+    )
+
+    contents = await file.read()
+    if len(contents) > MAX_IMPORT_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="Arquivo excede o tamanho máximo permitido")
+    with open(session.file_path, "wb") as buffer:
+        buffer.write(contents)
+
+    doc = session.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    await db.import_sessions.insert_one(doc)
+
+    return {"session_id": session.id, "filename": filename}
+
+
+@api_router.post("/import/preview")
+async def preview_import_data(
+    payload: ImportPreviewRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    session = await db.import_sessions.find_one(
+        {"id": payload.session_id, "user_id": current_user["id"]},
+        {"_id": 0}
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessão de importação não encontrada")
+
+    df = load_import_dataframe(session["file_path"], session["filename"])
+    preview_rows = df.head(payload.sample_size).to_dict(orient="records")
+
+    return {
+        "columns": df.columns.tolist(),
+        "preview": preview_rows,
+        "total_rows": len(df.index)
+    }
+
+
+@api_router.post("/import/validate")
+async def validate_import(
+    payload: ImportValidateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    session = await db.import_sessions.find_one(
+        {"id": payload.session_id, "user_id": current_user["id"]},
+        {"_id": 0}
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessão de importação não encontrada")
+
+    df = load_import_dataframe(session["file_path"], session["filename"])
+    result = validate_import_data(df, payload.mapping)
+
+    return {
+        "summary": result["summary"],
+        "errors": result["errors"],
+        "warnings": result["warnings"]
+    }
+
+
+@api_router.post("/import/commit")
+async def commit_import(
+    payload: ImportCommitRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    session = await db.import_sessions.find_one(
+        {"id": payload.session_id, "user_id": current_user["id"]},
+        {"_id": 0}
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessão de importação não encontrada")
+
+    df = load_import_dataframe(session["file_path"], session["filename"])
+    result = validate_import_data(df, payload.mapping)
+    if result["errors"]:
+        raise HTTPException(status_code=400, detail={
+            "message": "Importação contém erros bloqueantes",
+            "errors": result["errors"]
+        })
+
+    prepared = result["prepared"]
+    row_case_keys = result.get("row_case_keys", {})
+    cases_data = prepared["cases"]
+    agreements_data = prepared["agreements"]
+    installments_data = prepared["installments"]
+    alvaras_data = prepared["alvaras"]
+
+    duplicate_errors = []
+    for case_key, case_data in cases_data.items():
+        numero_processo = case_data.get("numero_processo")
+        internal_id = case_data.get("internal_id")
+        query = {"user_id": current_user["id"]}
+        if numero_processo:
+            query["numero_processo"] = numero_processo
+        elif internal_id:
+            query["internal_id"] = internal_id
+        else:
+            continue
+        existing = await db.cases.find_one(query, {"_id": 0})
+        if existing:
+            duplicate_errors.append({
+                "case_key": case_key,
+                "message": "Já existe um caso com o mesmo identificador"
+            })
+
+    if duplicate_errors:
+        raise HTTPException(status_code=400, detail={
+            "message": "Casos duplicados encontrados",
+            "errors": duplicate_errors
+        })
+
+    inserted_case_ids = []
+    inserted_agreement_ids = []
+    inserted_installment_ids = []
+    inserted_alvara_ids = []
+    case_id_map: Dict[str, str] = {}
+    agreement_id_map: Dict[str, str] = {}
+
+    try:
+        for case_key, case_data in cases_data.items():
+            has_agreement = case_key in agreements_data
+            status_processo = case_data.get("status_processo")
+            if has_agreement:
+                status_processo = "Acordo"
+
+            case = Case(
+                debtor_name=case_data["debtor_name"],
+                internal_id=case_data.get("internal_id"),
+                value_causa=case_data["value_causa"],
+                has_agreement=has_agreement,
+                polo_ativo_text=case_data["polo_ativo_text"],
+                notes=case_data.get("notes"),
+                numero_processo=case_data.get("numero_processo"),
+                data_protocolo=case_data.get("data_protocolo"),
+                status_processo=status_processo,
+                data_matricula=case_data.get("data_matricula"),
+                cpf=case_data.get("cpf"),
+                curso=case_data.get("curso"),
+                user_id=current_user["id"]
+            )
+            case.polo_ativo_codigo = extract_beneficiary_code(case.polo_ativo_text)
+            case_doc = case.model_dump()
+            case_doc["created_at"] = case_doc["created_at"].isoformat()
+            await db.cases.insert_one(case_doc)
+            inserted_case_ids.append(case.id)
+            case_id_map[case_key] = case.id
+
+        for case_key, agreement_data in agreements_data.items():
+            agreement_payload = AgreementCreate(
+                case_id=case_id_map[case_key],
+                total_value=agreement_data["total_value"],
+                installments_count=agreement_data["installments_count"],
+                installment_value=agreement_data["installment_value"],
+                first_due_date=agreement_data["first_due_date"],
+                has_entry=agreement_data.get("has_entry", False),
+                entry_value=agreement_data.get("entry_value"),
+                entry_via_alvara=agreement_data.get("entry_via_alvara", False),
+                entry_date=agreement_data.get("entry_date")
+            )
+            agreement = Agreement(**agreement_payload.model_dump())
+            agreement_doc = agreement.model_dump()
+            agreement_doc["created_at"] = agreement_doc["created_at"].isoformat()
+            await db.agreements.insert_one(agreement_doc)
+            inserted_agreement_ids.append(agreement.id)
+            agreement_id_map[case_key] = agreement.id
+
+            case_installments = installments_data.get(case_key, [])
+            has_entry_installment = any(inst.get("is_entry") for inst in case_installments)
+            entry_installment = build_entry_installment(agreement.id, agreement_payload)
+            if entry_installment and not has_entry_installment:
+                entry_doc = entry_installment.model_dump()
+                entry_doc["created_at"] = entry_doc["created_at"].isoformat()
+                entry_doc["status_calc"] = calculate_installment_status(
+                    entry_doc["due_date"], entry_doc.get("paid_date")
+                )
+                await db.installments.insert_one(entry_doc)
+                inserted_installment_ids.append(entry_installment.id)
+
+            if not case_installments:
+                installments = generate_installments_for_agreement(agreement.id, agreement_payload)
+                for installment in installments:
+                    inst_doc = installment.model_dump()
+                    inst_doc["created_at"] = inst_doc["created_at"].isoformat()
+                    inst_doc["status_calc"] = calculate_installment_status(
+                        inst_doc["due_date"], inst_doc.get("paid_date")
+                    )
+                    await db.installments.insert_one(inst_doc)
+                    inserted_installment_ids.append(installment.id)
+
+            case_beneficiario = extract_beneficiary_code(
+                cases_data[case_key].get("polo_ativo_text", "")
+            ) or "31"
+            entry_alvara = build_entry_alvara(agreement_payload, {"polo_ativo_codigo": case_beneficiario})
+            if entry_alvara and not alvaras_data.get(case_key):
+                alvara_doc = entry_alvara.model_dump()
+                alvara_doc["created_at"] = alvara_doc["created_at"].isoformat()
+                await db.alvaras.insert_one(alvara_doc)
+                inserted_alvara_ids.append(entry_alvara.id)
+
+        for case_key, installments in installments_data.items():
+            agreement_id = agreement_id_map.get(case_key)
+            if not agreement_id:
+                continue
+            for installment_data in installments:
+                number = installment_data.get("number")
+                if number is None and installment_data.get("is_entry"):
+                    number = 0
+                installment = Installment(
+                    agreement_id=agreement_id,
+                    number=number or 0,
+                    due_date=installment_data["due_date"],
+                    paid_date=installment_data.get("paid_date"),
+                    paid_value=installment_data.get("paid_value"),
+                    is_entry=installment_data.get("is_entry", False)
+                )
+                installment.status_calc = calculate_installment_status(
+                    installment.due_date, installment.paid_date
+                )
+                inst_doc = installment.model_dump()
+                inst_doc["created_at"] = inst_doc["created_at"].isoformat()
+                await db.installments.insert_one(inst_doc)
+                inserted_installment_ids.append(installment.id)
+
+        for case_key, alvaras in alvaras_data.items():
+            case_id = case_id_map.get(case_key)
+            if not case_id:
+                continue
+            for alvara_data in alvaras:
+                alvara = Alvara(
+                    case_id=case_id,
+                    data_alvara=alvara_data.get("data_alvara"),
+                    valor_alvara=alvara_data["valor_alvara"],
+                    beneficiario_codigo=alvara_data["beneficiario_codigo"],
+                    observacoes=alvara_data.get("observacoes"),
+                    status_alvara=alvara_data.get("status_alvara", "Aguardando alvará")
+                )
+                alvara_doc = alvara.model_dump()
+                alvara_doc["created_at"] = alvara_doc["created_at"].isoformat()
+                await db.alvaras.insert_one(alvara_doc)
+                inserted_alvara_ids.append(alvara.id)
+
+        import_log = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["id"],
+            "session_id": session["id"],
+            "filename": session["filename"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "totals": {
+                "cases": len(inserted_case_ids),
+                "agreements": len(inserted_agreement_ids),
+                "installments": len(inserted_installment_ids),
+                "alvaras": len(inserted_alvara_ids)
+            },
+            "warnings": len(result["warnings"])
+        }
+        await db.import_logs.insert_one(import_log)
+
+        results = []
+        for row_number in sorted(row_case_keys.keys()):
+            results.append({
+                "row": row_number,
+                "case_key": row_case_keys[row_number],
+                "status": "success",
+                "message": "Linha importada com sucesso"
+            })
+
+        return {
+            "message": "Importação concluída com sucesso",
+            "totals": import_log["totals"],
+            "results": results,
+            "warnings": result["warnings"]
+        }
+    except Exception as exc:
+        if inserted_installment_ids:
+            await db.installments.delete_many({"id": {"$in": inserted_installment_ids}})
+        if inserted_alvara_ids:
+            await db.alvaras.delete_many({"id": {"$in": inserted_alvara_ids}})
+        if inserted_agreement_ids:
+            await db.agreements.delete_many({"id": {"$in": inserted_agreement_ids}})
+        if inserted_case_ids:
+            await db.cases.delete_many({"id": {"$in": inserted_case_ids}})
+        raise HTTPException(
+            status_code=500,
+            detail="Falha na importação. Nenhum dado foi persistido."
+        ) from exc
+
+
+@api_router.get("/import/history")
+async def get_import_history(current_user: dict = Depends(get_current_user)):
+    logs = await db.import_logs.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return logs
 
 
 @api_router.get("/receipts/pdf")
@@ -976,6 +1717,10 @@ async def startup_db():
     await db.alvaras.create_index("case_id")
     await db.alvaras.create_index("data_alvara")
     await db.alvaras.create_index("beneficiario_codigo")
+    await db.import_sessions.create_index("user_id")
+    await db.import_sessions.create_index("created_at")
+    await db.import_logs.create_index("user_id")
+    await db.import_logs.create_index("created_at")
 
 
 @app.on_event("shutdown")
