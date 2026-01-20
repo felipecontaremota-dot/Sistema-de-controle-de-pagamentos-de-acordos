@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
@@ -13,7 +13,15 @@ import { toast } from 'sonner';
 import { ArrowLeft, Plus, Scale, FileText, Calendar, DollarSign, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { formatDateBR, formatCurrency } from '../utils/formatters';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+/**
+ * IMPORTANTE:
+ * - Em produção (Render), variáveis REACT_APP_* só entram no build se estiverem definidas no ambiente de build.
+ * - Seu projeto já usa REACT_APP_API_URL em outras telas (ex.: Login).
+ * - Aqui padronizamos a origem da URL para evitar "/undefined/api/..." no frontend.
+ */
+const BACKEND_URL = (process.env.REACT_APP_API_URL || process.env.REACT_APP_BACKEND_URL || 'https://legacord-backend.onrender.com')
+  .replace(/\/$/, '');
+
 const API = `${BACKEND_URL}/api`;
 
 export default function CaseDetail({ token, setToken }) {
@@ -30,7 +38,7 @@ export default function CaseDetail({ token, setToken }) {
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [selectedAlvara, setSelectedAlvara] = useState(null);
   const [alvaraToDelete, setAlvaraToDelete] = useState(null);
-  
+
   const [agreementForm, setAgreementForm] = useState({
     total_value: '',
     installments_count: '',
@@ -41,23 +49,34 @@ export default function CaseDetail({ token, setToken }) {
     entry_via_alvara: false,
     entry_date: '',
   });
-  
+
   const [paymentForm, setPaymentForm] = useState({
     paid_date: '',
     paid_value: '',
     due_date: '',
   });
-  
+
   const [alvaraForm, setAlvaraForm] = useState({
     data_alvara: '',
     valor_alvara: '',
     beneficiario_codigo: '31',
     observacoes: '',
   });
-  
+
   const navigate = useNavigate();
 
-  const fetchCaseDetail = async () => {
+  const handleUnauthorized = useCallback(() => {
+    setToken(null);
+    navigate('/login');
+  }, [navigate, setToken]);
+
+  const fetchCaseDetail = useCallback(async () => {
+    // Se não houver token, não faz request (evita chamadas quebradas e loop de erro)
+    if (!token) {
+      handleUnauthorized();
+      return;
+    }
+
     try {
       const response = await axios.get(`${API}/cases/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -65,34 +84,45 @@ export default function CaseDetail({ token, setToken }) {
       setData(response.data);
     } catch (error) {
       if (error.response?.status === 401) {
-        setToken(null);
-        navigate('/login');
+        handleUnauthorized();
+      } else if (error.response?.status === 404) {
+        toast.error('Caso não encontrado (404).');
       } else {
         toast.error('Erro ao carregar detalhes do caso');
       }
     }
-  };
+  }, [id, token, handleUnauthorized]);
 
   useEffect(() => {
     fetchCaseDetail();
-  }, [id]);
+  }, [fetchCaseDetail]);
 
   // Cálculo automático do valor da parcela
   useEffect(() => {
     const { total_value, installments_count, has_entry, entry_value } = agreementForm;
-    
-    if (total_value && installments_count && parseFloat(total_value) > 0 && parseInt(installments_count) > 0) {
+
+    if (
+      total_value &&
+      installments_count &&
+      parseFloat(total_value) > 0 &&
+      parseInt(installments_count, 10) > 0
+    ) {
       const totalValue = parseFloat(total_value);
       const entryVal = has_entry && entry_value ? parseFloat(entry_value) : 0;
       const baseValue = totalValue - entryVal;
-      const installmentVal = baseValue / parseInt(installments_count);
-      
-      setAgreementForm(prev => ({
+      const installmentVal = baseValue / parseInt(installments_count, 10);
+
+      setAgreementForm((prev) => ({
         ...prev,
-        installment_value: installmentVal.toFixed(2)
+        installment_value: installmentVal.toFixed(2),
       }));
     }
-  }, [agreementForm.total_value, agreementForm.installments_count, agreementForm.has_entry, agreementForm.entry_value]);
+  }, [
+    agreementForm.total_value,
+    agreementForm.installments_count,
+    agreementForm.has_entry,
+    agreementForm.entry_value,
+  ]);
 
   // Calcular data da primeira parcela automaticamente quando há entrada (1 mês calendário)
   useEffect(() => {
@@ -101,17 +131,17 @@ export default function CaseDetail({ token, setToken }) {
       // Adicionar 1 mês calendário
       const firstDueDate = new Date(entryDate);
       firstDueDate.setMonth(firstDueDate.getMonth() + 1);
-      
+
       // Ajustar para último dia do mês se dia não existir
       if (firstDueDate.getDate() !== entryDate.getDate()) {
         firstDueDate.setDate(0); // Último dia do mês anterior
       }
-      
+
       const formattedDate = firstDueDate.toISOString().split('T')[0];
-      
-      setAgreementForm(prev => ({
+
+      setAgreementForm((prev) => ({
         ...prev,
-        first_due_date: formattedDate
+        first_due_date: formattedDate,
       }));
     }
   }, [agreementForm.has_entry, agreementForm.entry_date]);
@@ -126,7 +156,7 @@ export default function CaseDetail({ token, setToken }) {
         {
           case_id: id,
           total_value: parseFloat(agreementForm.total_value),
-          installments_count: parseInt(agreementForm.installments_count),
+          installments_count: parseInt(agreementForm.installments_count, 10),
           installment_value: parseFloat(agreementForm.installment_value),
           first_due_date: agreementForm.first_due_date,
           has_entry: agreementForm.has_entry,
@@ -140,7 +170,11 @@ export default function CaseDetail({ token, setToken }) {
       setAgreementDialogOpen(false);
       fetchCaseDetail();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao criar acordo');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error(error.response?.data?.detail || 'Erro ao criar acordo');
+      }
     } finally {
       setLoading(false);
     }
@@ -155,7 +189,7 @@ export default function CaseDetail({ token, setToken }) {
         `${API}/installments/${selectedInstallment.id}`,
         {
           paid_date: paymentForm.paid_date,
-          paid_value: parseFloat(paymentForm.paid_value),
+          paid_value: paymentForm.paid_value === '' ? null : parseFloat(paymentForm.paid_value),
           due_date: paymentForm.due_date,
         },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -166,7 +200,11 @@ export default function CaseDetail({ token, setToken }) {
       setSelectedInstallment(null);
       fetchCaseDetail();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao atualizar parcela');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error(error.response?.data?.detail || 'Erro ao atualizar parcela');
+      }
     } finally {
       setLoading(false);
     }
@@ -196,7 +234,11 @@ export default function CaseDetail({ token, setToken }) {
       });
       fetchCaseDetail();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao cadastrar alvará');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error(error.response?.data?.detail || 'Erro ao cadastrar alvará');
+      }
     } finally {
       setLoading(false);
     }
@@ -220,7 +262,11 @@ export default function CaseDetail({ token, setToken }) {
       setSelectedAlvara(null);
       fetchCaseDetail();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao atualizar alvará');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error(error.response?.data?.detail || 'Erro ao atualizar alvará');
+      }
     } finally {
       setLoading(false);
     }
@@ -238,7 +284,11 @@ export default function CaseDetail({ token, setToken }) {
       setAlvaraToDelete(null);
       fetchCaseDetail();
     } catch (error) {
-      toast.error('Erro ao excluir alvará');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error('Erro ao excluir alvará');
+      }
     } finally {
       setLoading(false);
     }
@@ -254,7 +304,11 @@ export default function CaseDetail({ token, setToken }) {
       toast.success('Caso excluído com sucesso!');
       navigate('/cases');
     } catch (error) {
-      toast.error('Erro ao excluir caso');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error('Erro ao excluir caso');
+      }
     } finally {
       setLoading(false);
     }
@@ -264,6 +318,13 @@ export default function CaseDetail({ token, setToken }) {
     setLoading(true);
 
     try {
+      // proteção extra
+      if (!data?.agreement?.id) {
+        toast.error('Não há acordo para excluir.');
+        setDeleteAgreementDialogOpen(false);
+        return;
+      }
+
       await axios.delete(`${API}/agreements/${data.agreement.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -271,7 +332,11 @@ export default function CaseDetail({ token, setToken }) {
       setDeleteAgreementDialogOpen(false);
       fetchCaseDetail();
     } catch (error) {
-      toast.error('Erro ao excluir acordo');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error('Erro ao excluir acordo');
+      }
     } finally {
       setLoading(false);
     }
@@ -279,7 +344,7 @@ export default function CaseDetail({ token, setToken }) {
 
   const handleToggleAlvaraStatus = async (alvara) => {
     const newStatus = alvara.status_alvara === 'Aguardando alvará' ? 'Alvará pago' : 'Aguardando alvará';
-    
+
     try {
       await axios.put(
         `${API}/alvaras/${alvara.id}`,
@@ -289,7 +354,11 @@ export default function CaseDetail({ token, setToken }) {
       toast.success(`Status alterado para: ${newStatus}`);
       fetchCaseDetail();
     } catch (error) {
-      toast.error('Erro ao atualizar status do alvará');
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error('Erro ao atualizar status do alvará');
+      }
     }
   };
 
@@ -319,7 +388,7 @@ export default function CaseDetail({ token, setToken }) {
     );
   }
 
-  const totalAlvaras = data.alvaras.reduce((sum, alv) => sum + alv.valor_alvara, 0);
+  const totalAlvaras = (data.alvaras || []).reduce((sum, alv) => sum + (alv?.valor_alvara || 0), 0);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -1009,7 +1078,7 @@ export default function CaseDetail({ token, setToken }) {
           <TabsContent value="resumo" data-testid="resumo-tab-content">
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 space-y-6">
               <h3 className="text-lg font-semibold text-slate-900">Resumo do Caso</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h4 className="text-sm font-semibold text-slate-600 mb-3">Informações Básicas</h4>
@@ -1034,7 +1103,7 @@ export default function CaseDetail({ token, setToken }) {
                       <div>
                         <dt className="text-sm text-slate-600">Status do Processo</dt>
                         <dd>
-                          <Badge 
+                          <Badge
                             variant="outline"
                             className={
                               data.case.status_processo === 'Extinto'
