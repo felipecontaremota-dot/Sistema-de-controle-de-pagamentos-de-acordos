@@ -188,6 +188,7 @@ export default function Cases({ token, setToken }) {
       'Em atraso': { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' },
       Descumprido: { bg: 'bg-black', text: 'text-white', border: 'border-black' },
       'Dia de pagamento': { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
+      'Aguardando alvará': { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200' },
     };
 
     const config = statusConfig[status] || statusConfig['Em andamento'];
