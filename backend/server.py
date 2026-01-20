@@ -1,8 +1,3 @@
-diff --git a/backend/server.py b/backend/server.py
-index 410b8ec03da7f313e538914a0e04d712633a6a6c..d35380e17bf19664a89f73caa2f4bba1e0a53dbd 100644
---- a/backend/server.py
-+++ b/backend/server.py
-@@ -1,33 +1,34 @@
  from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File
  from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
  from fastapi.responses import StreamingResponse
