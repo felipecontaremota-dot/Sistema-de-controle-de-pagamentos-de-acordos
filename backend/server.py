@@ -518,7 +518,7 @@ async def create_alvara(alvara_data: AlvaraCreate, current_user: dict = Depends(
     alvara = {
         "id": str(uuid.uuid4()),
         **alvara_data.model_dump(),
-        "user_id": current_user["id],
+        "user_id": current_user["id"],
         "created_at": datetime.now(timezone.utc)
     }
 
