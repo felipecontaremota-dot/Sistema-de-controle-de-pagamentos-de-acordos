@@ -504,7 +504,10 @@ async def list_alvaras(case_id: Optional[str] = None, current_user: dict = Depen
 
 
 @api_router.post("/alvaras")
-async def create_alvara(alvara_data: AlvaraCreate, current_user: dict = Depends(get_current_user)):
+async def create_alvara(
+    alvara_data: AlvaraCreate,
+    current_user: dict = Depends(get_current_user)
+):
     case = None
 
     if alvara_data.case_id:
@@ -519,21 +522,24 @@ async def create_alvara(alvara_data: AlvaraCreate, current_user: dict = Depends(
         "id": str(uuid.uuid4()),
         **alvara_data.model_dump(),
         "user_id": current_user["id"],
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+        "status": "aguardando"
     }
 
-await db.alvaras.insert_one(alvara)
+    await db.alvaras.insert_one(alvara)
 
-try:
     if alvara_data.case_id:
-        await update_case_materialized_fields(alvara_data.case_id)
-except Exception as e:
-        logger.error(f"Erro ao atualizar campos materializados do caso: {e}")
-    
-return {
-    "message": "Alvará cadastrado com sucesso",
-    "id": alvara["id"]
-}
+        try:
+            await update_case_materialized_fields(alvara_data.case_id)
+        except Exception:
+            pass  # evita erro 500 por falha secundária
+
+    return {
+        "message": "Alvará cadastrado com sucesso",
+        "id": alvara["id"]
+    }
+
 
 @api_router.put("/alvaras/{alvara_id}")
 async def update_alvara(alvara_id: str, alvara_data: AlvaraUpdate, current_user: dict = Depends(get_current_user)):
