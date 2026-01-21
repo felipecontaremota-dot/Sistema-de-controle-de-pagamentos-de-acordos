@@ -420,41 +420,42 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
     await db.agreements.insert_one(agreement.model_dump())
 
     # =========================
-# GERAÇÃO DAS PARCELAS
-# =========================
+    # =========================
+    # GERAÇÃO DAS PARCELAS
+    # =========================
 
-# 1️⃣ ENTRADA (quando existir e NÃO for via alvará)
-if agreement.has_entry and not agreement.entry_via_alvara:
-    entry_installment = {
-        "id": str(uuid.uuid4()),
-        "agreement_id": agreement.id,
-        "is_entry": True,
-        "due_date": agreement.entry_date,
-        "paid_date": None,          # ⬅️ NÃO PAGA
-        "paid_value": None,         # ⬅️ NÃO RECEBIDA
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.installments.insert_one(entry_installment)
+    # 1️⃣ ENTRADA (quando existir e NÃO for via alvará)
+    if agreement.has_entry and not agreement.entry_via_alvara:
+        entry_installment = {
+            "id": str(uuid.uuid4()),
+            "agreement_id": agreement.id,
+            "is_entry": True,
+            "due_date": agreement.entry_date,
+            "paid_date": None,              # 👈 NÃO PAGA
+            "paid_value": None,             # 👈 NÃO RECEBIDA
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.installments.insert_one(entry_installment)
 
-# 2️⃣ PARCELAS MENSAIS (mês calendário, não 30 dias)
-first_due = datetime.strptime(agreement.first_due_date, "%Y-%m-%d")
+    # 2️⃣ PARCELAS MENSAIS (mês calendário)
+    first_due = datetime.strptime(agreement.first_due_date, "%Y-%m-%d")
 
-for i in range(agreement.installments_count):
-    due_date = first_due + relativedelta(months=i)
+    for i in range(agreement.installments_count):
+        due_date = first_due + relativedelta(months=i)
 
-    installment = {
-        "id": str(uuid.uuid4()),
-        "agreement_id": agreement.id,
-        "number": i + 1,
-        "is_entry": False,
-        "due_date": due_date.strftime("%Y-%m-%d"),
-        "paid_date": None,
-        "paid_value": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.installments.insert_one(installment)
+        installment = {
+            "id": str(uuid.uuid4()),
+            "agreement_id": agreement.id,
+            "number": i + 1,
+            "is_entry": False,
+            "due_date": due_date.strftime("%Y-%m-%d"),
+            "paid_date": None,
+            "paid_value": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.installments.insert_one(installment)
 
-
+    # 3️⃣ ENTRADA VIA ALVARÁ (quando aplicável)
     if agreement.has_entry and agreement.entry_via_alvara:
         alvara_entry = {
             "id": str(uuid.uuid4()),
@@ -464,7 +465,7 @@ for i in range(agreement.installments_count):
             "beneficiario_codigo": case.get("polo_ativo_codigo"),
             "status_alvara": "Aguardando alvará",
             "observacoes": "Entrada via alvará",
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.alvaras.insert_one(alvara_entry)
 
