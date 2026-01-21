@@ -522,10 +522,13 @@ async def create_alvara(alvara_data: AlvaraCreate, current_user: dict = Depends(
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 
-    await db.alvaras.insert_one(alvara)
-    await update_case_materialized_fields(alvara_data.case_id)
-    return alvara
+await db.alvaras.insert_one(alvara)
+await update_case_materialized_fields(alvara_data.case_id)
 
+return {
+    "message": "Alvará cadastrado com sucesso",
+    "id": alvara["id"]
+}
 
 @api_router.put("/alvaras/{alvara_id}")
 async def update_alvara(alvara_id: str, alvara_data: AlvaraUpdate, current_user: dict = Depends(get_current_user)):
