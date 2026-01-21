@@ -505,9 +505,15 @@ async def list_alvaras(case_id: Optional[str] = None, current_user: dict = Depen
 
 @api_router.post("/alvaras")
 async def create_alvara(alvara_data: AlvaraCreate, current_user: dict = Depends(get_current_user)):
-    case = await db.cases.find_one({"id": alvara_data.case_id, "user_id": current_user["id"]}, {"_id": 0})
-    if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = None
+
+    if alvara_data.case_id:
+        case = await db.cases.find_one(
+            {"id": alvara_data.case_id, "user_id": current_user["id"]},
+            {"_id": 0}
+        )
+        if not case:
+            raise HTTPException(status_code=404, detail="Case not found")
 
     alvara = {
         "id": str(uuid.uuid4()),
