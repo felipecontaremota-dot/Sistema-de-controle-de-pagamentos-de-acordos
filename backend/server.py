@@ -219,9 +219,6 @@ async def update_case_materialized_fields(case_id: str) -> None:
             if inst.get("paid_date"):
                 total_received += inst.get("paid_value", 0.0)
 
-        if agreement.get("has_entry") and not agreement.get("entry_via_alvara"):
-            total_received += agreement.get("entry_value", 0.0)
-
     for alvara in alvaras:
         if alvara.get("status_alvara") == "Alvará pago":
             total_received += alvara.get("valor_alvara", 0.0)
@@ -430,6 +427,7 @@ async def create_agreement(agreement_data: AgreementCreate, current_user: dict =
             "id": str(uuid.uuid4()),
             "agreement_id": agreement.id,
             "is_entry": True,
+            "number": None,
             "due_date": agreement.entry_date,
             "paid_date": None,              # 👈 NÃO PAGA
             "paid_value": None,             # 👈 NÃO RECEBIDA
