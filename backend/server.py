@@ -121,6 +121,15 @@ class Agreement(BaseModel):
     entry_date: Optional[str] = None
     created_at: Optional[str] = None
 
+class AgreementUpdate(BaseModel):
+    total_value: float
+    installments_count: int
+    installment_value: float
+    first_due_date: str
+    has_entry: bool
+    entry_value: Optional[float] = None
+    entry_via_alvara: bool
+    entry_date: Optional[str] = None
 
 class InstallmentUpdate(BaseModel):
     paid_date: Optional[str] = None
@@ -486,6 +495,69 @@ async def delete_agreement(agreement_id: str, current_user: dict = Depends(get_c
 
     await update_case_materialized_fields(agreement["case_id"])
     return {"message": "Agreement deleted"}
+
+@api_router.put("/agreements/{agreement_id}")
+async def update_agreement(
+    agreement_id: str,
+    payload: AgreementUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    agreement = await db.agreements.find_one({"id": agreement_id})
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+
+    case = await db.cases.find_one(
+        {"id": agreement["case_id"], "user_id": current_user["id"]}
+    )
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    # Atualiza o acordo
+    await db.agreements.update_one(
+        {"id": agreement_id},
+        {
+            "$set": {
+                "total_value": payload.total_value,
+                "installments_count": payload.installments_count,
+                "installment_value": payload.installment_value,
+                "first_due_date": payload.first_due_date,
+                "has_entry": payload.has_entry,
+                "entry_value": payload.entry_value,
+                "entry_via_alvara": payload.entry_via_alvara,
+                "entry_date": payload.entry_date,
+            }
+        }
+    )
+
+    # Buscar parcelas
+    installments = await db.installments.find(
+        {"agreement_id": agreement_id}
+    ).to_list(None)
+
+    # Filtrar parcelas NÃO pagas
+    unpaid_installments = [
+        inst for inst in installments
+        if inst.get("status_calc") != "Pago"
+    ]
+
+    # Recalcular vencimentos apenas das parcelas não pagas
+    due_date = datetime.fromisoformat(payload.first_due_date)
+
+    for inst in unpaid_installments:
+        await db.installments.update_one(
+            {"id": inst["id"]},
+            {
+                "$set": {
+                    "due_date": due_date.date().isoformat(),
+                    "value": payload.installment_value
+                }
+            }
+        )
+        due_date = due_date.replace(month=due_date.month + 1)
+
+    await update_case_materialized_fields(agreement["case_id"])
+
+    return {"message": "Agreement updated successfully"}
 
 
 @api_router.put("/installments/{installment_id}")
