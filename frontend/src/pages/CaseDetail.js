@@ -522,6 +522,7 @@ const handleUpdateAgreement = async (e) => {
           <TabsContent value="acordo" data-testid="acordo-tab-content">
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
               {data.agreement ? (
+                <>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-semibold text-slate-900">Detalhes do Acordo</h3>
@@ -563,6 +564,7 @@ const handleUpdateAgreement = async (e) => {
                      </Button>
                     </div>
                   </div>
+                      
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-slate-600">Valor total</p>
@@ -609,8 +611,8 @@ const handleUpdateAgreement = async (e) => {
                 </div>
                     
     <Dialog
-      open={agreementDialogOpen}
-      onOpenChange={setAgreementDialogOpen}
+      open={editAgreementDialogOpen}
+      onOpenChange={setEditAgreementDialogOpen}
     >
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -620,11 +622,39 @@ const handleUpdateAgreement = async (e) => {
           </DialogDescription>
         </DialogHeader>
 
-        <form
-          onSubmit={handleUpdateAgreement}
-          className="space-y-4"
-        >
-          {/* reutilize os mesmos Inputs do Criar Acordo */}
+        <form onSubmit={handleUpdateAgreement} className="space-y-4">
+<div className="grid grid-cols-2 gap-4">
+  <div>
+    <Label htmlFor="total_value">Valor total do acordo *</Label>
+    <Input
+      id="total_value"
+      type="number"
+      step="0.01"
+      value={agreementForm.total_value}
+      onChange={(e) =>
+        setAgreementForm({ ...agreementForm, total_value: e.target.value })
+      }
+      required
+    />
+  </div>
+
+  <div>
+    <Label htmlFor="installments_count">Número de parcelas *</Label>
+    <Input
+      id="installments_count"
+      type="number"
+      value={agreementForm.installments_count}
+      onChange={(e) =>
+        setAgreementForm({
+          ...agreementForm,
+          installments_count: e.target.value,
+        })
+      }
+      required
+    />
+  </div>
+</div>
+
           <Button
             type="submit"
             className="w-full"
@@ -637,7 +667,7 @@ const handleUpdateAgreement = async (e) => {
     </Dialog>
   </>
 ) : (
-  {/* bloco “Nenhum acordo cadastrado” */}
+  <></>
 )}
 
               ) : (
@@ -684,104 +714,129 @@ const handleUpdateAgreement = async (e) => {
                           </div>
                         </div>
 
-                        <div className="border-t pt-4">
-                          <div className="flex items-center space-x-2 mb-3">
-                            <Label htmlFor="has_entry">Há pagamento de entrada?</Label>
-                            <Select
-                              value={agreementForm.has_entry ? 'sim' : 'nao'}
-                              onValueChange={(value) => setAgreementForm({ ...agreementForm, has_entry: value === 'sim' })}
-                            >
-                              <SelectTrigger className="w-32" data-testid="has-entry-select">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="nao">Não</SelectItem>
-                                <SelectItem value="sim">Sim</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+<div className="border-t pt-4">
+  <div className="flex items-center space-x-2 mb-3">
+    <Label htmlFor="has_entry">Há pagamento de entrada?</Label>
+    <Select
+      value={agreementForm.has_entry ? 'sim' : 'nao'}
+      onValueChange={(value) =>
+        setAgreementForm({
+          ...agreementForm,
+          has_entry: value === 'sim',
+        })
+      }
+    >
+      <SelectTrigger className="w-32">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="nao">Não</SelectItem>
+        <SelectItem value="sim">Sim</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
 
-                          {agreementForm.has_entry && (
-                            <div className="space-y-4 bg-slate-50 p-4 rounded-lg">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label htmlFor="entry_value">Valor da entrada *</Label>
-                                  <Input
-                                    id="entry_value"
-                                    type="number"
-                                    step="0.01"
-                                    value={agreementForm.entry_value}
-                                    onChange={(e) => setAgreementForm({ ...agreementForm, entry_value: e.target.value })}
-                                    required={agreementForm.has_entry}
-                                    data-testid="entry-value-input"
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="entry_date">
-                                    Data da entrada {agreementForm.entry_via_alvara ? '(opcional)' : '*'}
-                                  </Label>
-                                  <Input
-                                    id="entry_date"
-                                    type="date"
-                                    value={agreementForm.entry_date}
-                                    onChange={(e) => setAgreementForm({ ...agreementForm, entry_date: e.target.value })}
-                                    required={agreementForm.has_entry && !agreementForm.entry_via_alvara}
-                                    data-testid="entry-date-input"
-                                  />
-                                  {agreementForm.entry_via_alvara && (
-                                    <p className="text-xs text-slate-500 mt-1">
-                                      Aguardando liberação judicial
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <input
-                                  type="checkbox"
-                                  id="entry_via_alvara"
-                                  checked={agreementForm.entry_via_alvara}
-                                  onChange={(e) => setAgreementForm({ ...agreementForm, entry_via_alvara: e.target.checked })}
-                                  className="rounded"
-                                  data-testid="entry-via-alvara-checkbox"
-                                />
-                                <Label htmlFor="entry_via_alvara" className="cursor-pointer">
-                                  Entrada via Alvará Judicial
-                                </Label>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+  {agreementForm.has_entry && (
+    <div className="space-y-4 bg-slate-50 p-4 rounded-lg">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="entry_value">Valor da entrada *</Label>
+          <Input
+            id="entry_value"
+            type="number"
+            step="0.01"
+            value={agreementForm.entry_value}
+            onChange={(e) =>
+              setAgreementForm({
+                ...agreementForm,
+                entry_value: e.target.value,
+              })
+            }
+            required
+          />
+        </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="installment_value">Valor da parcela (calculado)</Label>
-                            <Input
-                              id="installment_value"
-                              type="number"
-                              step="0.01"
-                              value={agreementForm.installment_value}
-                              onChange={(e) =>
-                                setAgreementForm({ ...agreementForm, installment_value: e.target.value })
-                              }
-                              required
-                              className="bg-slate-50"
-                              data-testid="installment-value-input"
-                            />
+        <div>
+          <Label htmlFor="entry_date">Data da entrada</Label>
+          <Input
+            id="entry_date"
+            type="date"
+            value={agreementForm.entry_date}
+            onChange={(e) =>
+              setAgreementForm({
+                ...agreementForm,
+                entry_date: e.target.value,
+              })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          id="entry_via_alvara"
+          checked={agreementForm.entry_via_alvara}
+          onChange={(e) =>
+            setAgreementForm({
+              ...agreementForm,
+              entry_via_alvara: e.target.checked,
+            })
+          }
+        />
+        <Label htmlFor="entry_via_alvara">
+          Entrada via Alvará Judicial
+        </Label>
+      </div>
+    </div>
+  )}
+</div>
+
+
+<div className="grid grid-cols-2 gap-4">
+  <div>
+    <Label htmlFor="installment_value">
+      Valor da parcela (calculado)
+    </Label>
+    <Input
+      id="installment_value"
+      type="number"
+      step="0.01"
+      value={agreementForm.installment_value}
+      onChange={(e) =>
+        setAgreementForm({
+          ...agreementForm,
+          installment_value: e.target.value,
+        })
+      }
+      required
+      className="bg-slate-50"
+    />
+  </div>
+
                             <p className="text-xs text-amber-600 mt-1 flex items-center">
                               <AlertCircle className="w-3 h-3 mr-1" />
                               Valor calculado automaticamente
                             </p>
                           </div>
                           <div>
-                            <Label htmlFor="first_due_date">Data da 1ª parcela *</Label>
-                            <Input
-                              id="first_due_date"
-                              type="date"
-                              value={agreementForm.first_due_date}
-                              onChange={(e) => setAgreementForm({ ...agreementForm, first_due_date: e.target.value })}
-                              required
-                              data-testid="first-due-date-input"
-                            />
+  <div>
+    <Label htmlFor="first_due_date">Data da 1ª parcela *</Label>
+    <Input
+      id="first_due_date"
+      type="date"
+      value={agreementForm.first_due_date}
+      onChange={(e) =>
+        setAgreementForm({
+          ...agreementForm,
+          first_due_date: e.target.value,
+        })
+      }
+      required
+    />
+  </div>
+</div>
+
                             {agreementForm.has_entry && agreementForm.entry_date && (
                               <p className="text-xs text-blue-600 mt-1">
                                 Gerada automaticamente (entrada + 1 mês)
