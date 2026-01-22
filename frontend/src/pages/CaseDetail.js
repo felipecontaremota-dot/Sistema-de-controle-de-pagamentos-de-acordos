@@ -38,6 +38,7 @@ export default function CaseDetail({ token, setToken }) {
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [selectedAlvara, setSelectedAlvara] = useState(null);
   const [alvaraToDelete, setAlvaraToDelete] = useState(null);
+  const [editAgreementDialogOpen, setEditAgreementDialogOpen] = useState(false);
 
   const [agreementForm, setAgreementForm] = useState({
     total_value: '',
@@ -342,6 +343,49 @@ export default function CaseDetail({ token, setToken }) {
     }
   };
 
+const handleUpdateAgreement = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+
+  try {
+    await axios.put(
+      `${API}/agreements/${data.agreement.id}`,
+      {
+        total_value: parseFloat(agreementForm.total_value),
+        installments_count: parseInt(agreementForm.installments_count, 10),
+        installment_value: parseFloat(agreementForm.installment_value),
+        first_due_date: agreementForm.first_due_date,
+        has_entry: agreementForm.has_entry,
+        entry_value: agreementForm.has_entry
+          ? parseFloat(agreementForm.entry_value)
+          : null,
+        entry_via_alvara: agreementForm.entry_via_alvara,
+        entry_date: agreementForm.has_entry
+          ? agreementForm.entry_date
+          : null,
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    toast.success("Acordo atualizado com sucesso!");
+    setEditAgreementDialogOpen(false);
+    fetchCaseDetail();
+  } catch (error) {
+    if (error.response?.status === 401) {
+      handleUnauthorized();
+    } else {
+      toast.error(
+        error.response?.data?.detail || "Erro ao atualizar acordo"
+      );
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+  
+
   const handleToggleAlvaraStatus = async (alvara) => {
     const newStatus = alvara.status_alvara === 'Aguardando alvará' ? 'Alvará pago' : 'Aguardando alvará';
 
@@ -495,13 +539,26 @@ export default function CaseDetail({ token, setToken }) {
                      </Button>
 
                      <Button
-                       onClick={() => setAgreementDialogOpen(true)}
-                       variant="outline"
-                       size="sm"
-                       className="border-slate-300 text-slate-700 hover:bg-slate-100"
-                       data-testid="edit-agreement-button"
-                     >
-                       <Pencil className="w-4 h-4 mr-2" />
+                        onClick={() => {
+                          setAgreementForm({
+                            total_value: data.agreement.total_value,
+                            installments_count: data.agreement.installments_count,
+                            installment_value: data.agreement.installment_value,
+                            first_due_date: data.agreement.first_due_date,
+                            has_entry: data.agreement.has_entry,
+                            entry_value: data.agreement.entry_value || '',
+                            entry_via_alvara: data.agreement.entry_via_alvara,
+                            entry_date: data.agreement.entry_date || '',
+                          });
+                        setEditAgreementDialogOpen(true);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                    data-testid="edit-agreement-button"
+                  >
+ 
+                      <Pencil className="w-4 h-4 mr-2" />
                        Editar Acordo
                      </Button>
                     </div>
@@ -550,6 +607,39 @@ export default function CaseDetail({ token, setToken }) {
                     )}
                   </div>
                 </div>
+                    
+    <Dialog
+      open={agreementDialogOpen}
+      onOpenChange={setAgreementDialogOpen}
+    >
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Editar Acordo</DialogTitle>
+          <DialogDescription>
+            Atualize os dados do acordo
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          onSubmit={handleUpdateAgreement}
+          className="space-y-4"
+        >
+          {/* reutilize os mesmos Inputs do Criar Acordo */}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading}
+          >
+            {loading ? 'Salvando...' : 'Salvar Alterações'}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  </>
+) : (
+  {/* bloco “Nenhum acordo cadastrado” */}
+)}
+
               ) : (
                 <div className="text-center py-8">
                   <p className="text-slate-600 mb-4">Nenhum acordo cadastrado para este caso</p>
