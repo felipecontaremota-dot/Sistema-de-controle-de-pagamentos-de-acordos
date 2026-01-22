@@ -610,61 +610,65 @@ const handleUpdateAgreement = async (e) => {
                   </div>
                 </div>
                     
-    <Dialog
-      open={editAgreementDialogOpen}
-      onOpenChange={setEditAgreementDialogOpen}
-    >
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Editar Acordo</DialogTitle>
-          <DialogDescription>
-            Atualize os dados do acordo
-          </DialogDescription>
-        </DialogHeader>
+<Dialog
+  open={editAgreementDialogOpen}
+  onOpenChange={setEditAgreementDialogOpen}
+>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Editar Acordo</DialogTitle>
+      <DialogDescription>
+        Atualize os dados do acordo
+      </DialogDescription>
+    </DialogHeader>
 
-        <form onSubmit={handleUpdateAgreement} className="space-y-4">
-<div className="grid grid-cols-2 gap-4">
-  <div>
-    <Label htmlFor="total_value">Valor total do acordo *</Label>
-    <Input
-      id="total_value"
-      type="number"
-      step="0.01"
-      value={agreementForm.total_value}
-      onChange={(e) =>
-        setAgreementForm({ ...agreementForm, total_value: e.target.value })
-      }
-      required
-    />
-  </div>
+    <form onSubmit={handleUpdateAgreement} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="total_value">Valor total do acordo *</Label>
+          <Input
+            id="total_value"
+            type="number"
+            step="0.01"
+            value={agreementForm.total_value}
+            onChange={(e) =>
+              setAgreementForm({ ...agreementForm, total_value: e.target.value })
+            }
+            required
+          />
+        </div>
 
-  <div>
-    <Label htmlFor="installments_count">Número de parcelas *</Label>
-    <Input
-      id="installments_count"
-      type="number"
-      value={agreementForm.installments_count}
-      onChange={(e) =>
-        setAgreementForm({
-          ...agreementForm,
-          installments_count: e.target.value,
-        })
-      }
-      required
-    />
-  </div>
-</div>
+        <div>
+          <Label htmlFor="installments_count">Número de parcelas *</Label>
+          <Input
+            id="installments_count"
+            type="number"
+            value={agreementForm.installments_count}
+            onChange={(e) =>
+              setAgreementForm({
+                ...agreementForm,
+                installments_count: e.target.value,
+              })
+            }
+            required
+          />
+        </div>
+      </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loading}
-          >
-            {loading ? 'Salvando...' : 'Salvar Alterações'}
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+      {/* Repita aqui TODOS os outros inputs do Criar Acordo */}
+
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={loading}
+      >
+        {loading ? 'Salvando...' : 'Salvar Alterações'}
+      </Button>
+    </form>
+
+  </DialogContent>
+</Dialog>
+
   </>
 ) : (
   <></>
