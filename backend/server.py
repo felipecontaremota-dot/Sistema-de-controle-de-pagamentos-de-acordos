@@ -529,6 +529,36 @@ async def update_agreement(
         }
     )
 
+        # 2️⃣ Remove SOMENTE parcelas NÃO pagas
+    await db.installments.delete_many({
+        "agreement_id": agreement_id,
+        "paid_date": None
+    })
+
+    # 3️⃣ Recria parcelas futuras
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
+
+    due_date = datetime.fromisoformat(data.first_due_date)
+
+    for i in range(1, data.installments_count + 1):
+        installment = {
+            "id": str(uuid.uuid4()),
+            "agreement_id": agreement_id,
+            "number": i,
+            "due_date": due_date.date().isoformat(),
+            "value": data.installment_value,
+            "paid_date": None,
+            "paid_value": None,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        await db.installments.insert_one(installment)
+        due_date += relativedelta(months=1)
+
+    await update_case_materialized_fields(agreement["case_id"])
+
+    return {"message": "Agreement updated successfully"}
+ 
     # Buscar parcelas
     installments = await db.installments.find(
         {"agreement_id": agreement_id}
