@@ -669,8 +669,7 @@ const handleUpdateAgreement = async (e) => {
   </DialogContent>
 </Dialog>
 
-  </>
-
+                </>
               ) : (
                 <div className="text-center py-8">
                   <p className="text-slate-600 mb-4">Nenhum acordo cadastrado para este caso</p>
