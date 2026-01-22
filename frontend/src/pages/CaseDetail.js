@@ -670,9 +670,6 @@ const handleUpdateAgreement = async (e) => {
 </Dialog>
 
   </>
-) : (
-  <></>
-)}
 
               ) : (
                 <div className="text-center py-8">
