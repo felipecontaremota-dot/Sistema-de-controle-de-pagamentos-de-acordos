@@ -812,14 +812,11 @@ const handleUpdateAgreement = async (e) => {
       required
       className="bg-slate-50"
     />
+    <p className="text-xs text-amber-600 mt-1 flex items-center">
+      <AlertCircle className="w-3 h-3 mr-1" />
+      Valor calculado automaticamente
+    </p>
   </div>
-
-                            <p className="text-xs text-amber-600 mt-1 flex items-center">
-                              <AlertCircle className="w-3 h-3 mr-1" />
-                              Valor calculado automaticamente
-                            </p>
-                          </div>
-                          <div>
   <div>
     <Label htmlFor="first_due_date">Data da 1ª parcela *</Label>
     <Input
@@ -834,16 +831,13 @@ const handleUpdateAgreement = async (e) => {
       }
       required
     />
+    {agreementForm.has_entry && agreementForm.entry_date && (
+      <p className="text-xs text-blue-600 mt-1">
+        Gerada automaticamente (entrada + 1 mês)
+      </p>
+    )}
   </div>
 </div>
-
-                            {agreementForm.has_entry && agreementForm.entry_date && (
-                              <p className="text-xs text-blue-600 mt-1">
-                                Gerada automaticamente (entrada + 1 mês)
-                              </p>
-                            )}
-                          </div>
-                        </div>
 
                         <Button type="submit" className="w-full" disabled={loading} data-testid="submit-agreement-button">
                           {loading ? 'Criando...' : 'Criar Acordo'}
