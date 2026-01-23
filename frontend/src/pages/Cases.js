@@ -23,12 +23,24 @@ const STATUS_PROCESSO_OPTIONS = [
   'Extinto'
 ];
 
+const SORT_OPTIONS = [
+  { value: 'recent', label: 'Mais recentes' },
+  { value: 'debtor_name_asc', label: 'Ordem alfabética (devedor)' },
+  { value: 'value_causa_asc', label: 'Menor valor da causa' },
+  { value: 'value_causa_desc', label: 'Maior valor da causa' },
+  { value: 'total_received_asc', label: 'Menor valor recebido' },
+  { value: 'total_received_desc', label: 'Maior valor recebido' },
+  { value: 'percent_recovered_asc', label: 'Menor % recuperado' },
+  { value: 'percent_recovered_desc', label: 'Maior % recuperado' },
+];
+
 export default function Cases({ token, setToken }) {
   const [cases, setCases] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [beneficiaryFilter, setBeneficiaryFilter] = useState('');
   const [statusProcessoFilter, setStatusProcessoFilter] = useState('');
+  const [sortOption, setSortOption] = useState('recent');
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCase, setEditingCase] = useState(null);
@@ -208,6 +220,40 @@ export default function Cases({ token, setToken }) {
     );
   };
 
+  const toNumericValue = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const sortedCases = (() => {
+    if (sortOption === 'recent') {
+      return cases;
+    }
+
+    const casesCopy = [...cases];
+
+    switch (sortOption) {
+      case 'debtor_name_asc':
+        return casesCopy.sort((a, b) =>
+          (a.debtor_name || '').localeCompare(b.debtor_name || '', 'pt-BR', { sensitivity: 'base' })
+        );
+      case 'value_causa_asc':
+        return casesCopy.sort((a, b) => toNumericValue(a.value_causa) - toNumericValue(b.value_causa));
+      case 'value_causa_desc':
+        return casesCopy.sort((a, b) => toNumericValue(b.value_causa) - toNumericValue(a.value_causa));
+      case 'total_received_asc':
+        return casesCopy.sort((a, b) => toNumericValue(a.total_received) - toNumericValue(b.total_received));
+      case 'total_received_desc':
+        return casesCopy.sort((a, b) => toNumericValue(b.total_received) - toNumericValue(a.total_received));
+      case 'percent_recovered_asc':
+        return casesCopy.sort((a, b) => toNumericValue(a.percent_recovered) - toNumericValue(b.percent_recovered));
+      case 'percent_recovered_desc':
+        return casesCopy.sort((a, b) => toNumericValue(b.percent_recovered) - toNumericValue(a.percent_recovered));
+      default:
+        return cases;
+    }
+  })();
+
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-white border-b border-slate-200">
@@ -250,7 +296,7 @@ export default function Cases({ token, setToken }) {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
@@ -436,7 +482,7 @@ export default function Cases({ token, setToken }) {
               <h3 className="font-semibold text-slate-900">Filtros</h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <Label htmlFor="search">Buscar por devedor</Label>
                 <div className="relative mt-1">
@@ -499,6 +545,22 @@ export default function Cases({ token, setToken }) {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div>
+                <Label htmlFor="sort-cases">Ordenar por</Label>
+                <Select value={sortOption} onValueChange={setSortOption}>
+                  <SelectTrigger className="mt-1" data-testid="sort-cases">
+                    <SelectValue placeholder="Mais recentes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </div>
@@ -536,7 +598,7 @@ export default function Cases({ token, setToken }) {
               </thead>
 
               <tbody className="divide-y divide-slate-200">
-                {cases.map((case_) => (
+                {sortedCases.map((case_) => (
                   <tr
                     key={case_.id}
                     className="table-row cursor-pointer"
@@ -641,7 +703,7 @@ export default function Cases({ token, setToken }) {
             </table>
           </div>
 
-          {cases.length === 0 && (
+          {sortedCases.length === 0 && (
             <div className="text-center py-12" data-testid="empty-state">
               <p className="text-slate-500">Nenhum caso encontrado</p>
             </div>
