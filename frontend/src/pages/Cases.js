@@ -227,7 +227,7 @@ export default function Cases({ token, setToken }) {
 
   const sortedCases = (() => {
     if (sortOption === 'recent') {
-      return cases;
+      return [...cases];
     }
 
     const casesCopy = [...cases];
@@ -257,7 +257,7 @@ export default function Cases({ token, setToken }) {
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1600px] mx-auto px-6">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
               <Scale className="w-8 h-8 text-slate-900" />
