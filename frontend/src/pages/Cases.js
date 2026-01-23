@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from "../lib/api";
 
@@ -225,11 +225,7 @@ export default function Cases({ token, setToken }) {
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
-  const sortedCases = (() => {
-    if (sortOption === 'recent') {
-      return [...cases];
-    }
-
+  const sortedCases = useMemo(() => {
     const casesCopy = [...cases];
 
     switch (sortOption) {
@@ -249,10 +245,11 @@ export default function Cases({ token, setToken }) {
         return casesCopy.sort((a, b) => toNumericValue(a.percent_recovered) - toNumericValue(b.percent_recovered));
       case 'percent_recovered_desc':
         return casesCopy.sort((a, b) => toNumericValue(b.percent_recovered) - toNumericValue(a.percent_recovered));
+      case 'recent':
       default:
-        return cases;
+        return casesCopy;
     }
-  })();
+  }, [cases, sortOption]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -565,9 +562,9 @@ export default function Cases({ token, setToken }) {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full" data-testid="cases-table">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden w-full">
+          <div className="overflow-x-auto w-full">
+            <table className="min-w-full w-full" data-testid="cases-table">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
