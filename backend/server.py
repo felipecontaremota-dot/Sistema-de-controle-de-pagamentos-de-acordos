@@ -335,8 +335,8 @@ async def get_cases(
     if status_processo:
         query["status_processo"] = status_processo
 
-    cases = await db.cases.find(query, {"_id": 0}).to_list(1000)
-
+    cases = await db.cases.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
     result = []
     for case in cases:
         result.append({
