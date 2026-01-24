@@ -1453,6 +1453,22 @@ export default function CaseDetail({ token, setToken }) {
                         <dd className="text-base font-medium text-slate-900 font-mono">{data.case.cpf}</dd>
                       </div>
                     )}
+                    {data.case.whatsapp && (
+                      <div>
+                        <dt className="text-sm text-slate-600">WhatsApp</dt>
+                        <dd className="text-base font-medium text-slate-900">
+                          {data.case.whatsapp}
+                        </dd>
+                      </div>
+                    )}
+                    {data.case.email && (
+                      <div>
+                        <dt className="text-sm text-slate-600">E-mail</dt>
+                        <dd className="text-base font-medium text-slate-900">
+                          {data.case.email}
+                        </dd>
+                      </div>
+                    )}
                     {data.case.numero_processo && (
                       <div>
                         <dt className="text-sm text-slate-600">Número do Processo</dt>
