@@ -20,7 +20,16 @@ const STATUS_PROCESSO_OPTIONS = [
   'Aguardando Alvará',
   'Acordo',
   'Sucesso',
-  'Extinto'
+  'Extinto',
+
+  // novos status
+  'Ext. Arbitragem',
+  'Desistência requerida',
+  'Preso',
+  'Falecido',
+  'Devedor não localizado',
+  'Inexistência de bens',
+  'Improcedência',
 ];
 
 const SORT_OPTIONS = [
@@ -33,6 +42,23 @@ const SORT_OPTIONS = [
   { value: 'percent_recovered_asc', label: 'Menor % recuperado' },
   { value: 'percent_recovered_desc', label: 'Maior % recuperado' },
 ];
+
+const STATUS_PROCESSO_STYLES = {
+  'Execução': 'bg-blue-900 text-white border-blue-900',
+  'Cobrança': 'bg-blue-300 text-blue-900 border-blue-300',
+  'Cumprimento de Sentença': 'bg-red-500 text-black border-red-500',
+  'Aguardando Alvará': 'bg-purple-600 text-white border-purple-600',
+  'Acordo': 'bg-amber-100 text-amber-800 border-amber-200',
+  'Sucesso': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  'Extinto': 'bg-black text-white border-black',
+  'Ext. Arbitragem': 'bg-black text-white border-black',
+  'Desistência requerida': 'bg-black text-white border-black',
+  'Preso': 'bg-black text-white border-black',
+  'Falecido': 'bg-black text-white border-black',
+  'Devedor não localizado': 'bg-black text-white border-black',
+  'Inexistência de bens': 'bg-black text-white border-black',
+  'Improcedência': 'bg-black text-white border-black',
+};
 
 export default function Cases({ token, setToken }) {
   const [cases, setCases] = useState([]);
@@ -683,13 +709,8 @@ export default function Cases({ token, setToken }) {
                         <Badge
                           variant="outline"
                           className={
-                            case_.status_processo === 'Extinto'
-                              ? 'bg-black text-white border-black'
-                              : case_.status_processo === 'Acordo'
-                              ? 'bg-amber-100 text-amber-800 border-amber-200'
-                              : case_.status_processo === 'Sucesso'
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                              : 'text-xs'
+                            STATUS_PROCESSO_STYLES[case_.status_processo] ||
+                            'bg-slate-100 text-slate-700 border-slate-200'
                           }
                         >
                           {case_.status_processo}
