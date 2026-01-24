@@ -392,6 +392,7 @@ async def get_case(case_id: str, current_user: dict = Depends(get_current_user))
         installments = await db.installments.find({"agreement_id": agreement["id"]}, {"_id": 0}).to_list(1000)
         for inst in installments:
             inst["status_calc"] = calculate_installment_status(inst["due_date"], inst.get("paid_date"))
+        installments.sort(key=lambda inst: (not inst.get("is_entry", False), inst.get("number") is None, inst.get("number")))            
 
     alvaras = await db.alvaras.find({"case_id": case_id}, {"_id": 0}).to_list(1000)
 
