@@ -320,6 +320,8 @@ async def get_cases(
     has_agreement: Optional[bool] = None,
     beneficiario: Optional[str] = None,
     status_processo: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10,
     current_user: dict = Depends(get_current_user)
 ):
     query = {"user_id": current_user["id"]}
@@ -335,7 +337,18 @@ async def get_cases(
     if status_processo:
         query["status_processo"] = status_processo
 
-    cases = await db.cases.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    safe_page = max(page, 1)
+    safe_limit = max(limit, 1)
+    skip = (safe_page - 1) * safe_limit
+
+    total = await db.cases.count_documents(query)
+    cases = await (
+        db.cases.find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(safe_limit)
+        .to_list(safe_limit)
+    )
     
     result = []
     for case in cases:
@@ -346,8 +359,17 @@ async def get_cases(
             "status_acordo": case.get("status_acordo", "")
         })
 
-    return result
+    total_pages = max(1, (total + safe_limit - 1) // safe_limit)
 
+    return {
+        "data": result,
+        "pagination": {
+            "page": safe_page,
+            "limit": safe_limit,
+            "total": total,
+            "total_pages": total_pages
+        }
+    }
 
 @api_router.get("/cases/{case_id}")
 async def get_case(case_id: str, current_user: dict = Depends(get_current_user)):
