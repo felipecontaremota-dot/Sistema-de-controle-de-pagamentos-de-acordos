@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Cases from './pages/Cases';
 import CaseDetail from './pages/CaseDetail';
 import Recebimentos from './pages/Recebimentos';
+import AlvarasPendentes from './pages/AlvarasPendentes';
 import Import from './pages/Import';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
@@ -55,6 +56,14 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/alvaras-pendentes"
+            element={
+              <ProtectedRoute>
+                <AlvarasPendentes token={token} setToken={setToken} />
+              </ProtectedRoute>
+            }
+          />            
           <Route
             path="/import"
             element={
