@@ -122,14 +122,15 @@ class Agreement(BaseModel):
     created_at: Optional[str] = None
 
 class AgreementUpdate(BaseModel):
-    total_value: float
-    installments_count: int
-    installment_value: float
-    first_due_date: str
-    has_entry: bool
+    total_value: Optional[float] = None
+    installments_count: Optional[int] = None
+    installment_value: Optional[float] = None
+    first_due_date: Optional[str] = None
+    has_entry: Optional[bool] = None
     entry_value: Optional[float] = None
-    entry_via_alvara: bool
+    entry_via_alvara: Optional[bool] = None
     entry_date: Optional[str] = None
+    notes: Optional[str] = None    
 
 class InstallmentUpdate(BaseModel):
     paid_date: Optional[str] = None
@@ -524,88 +525,136 @@ async def update_agreement(
     payload: AgreementUpdate,
     current_user: dict = Depends(get_current_user)
 ):
-    agreement = await db.agreements.find_one({"id": agreement_id})
+    agreement = await db.agreements.find_one({"id": agreement_id}, {"_id": 0})
     if not agreement:
         raise HTTPException(status_code=404, detail="Agreement not found")
 
     case = await db.cases.find_one(
-        {"id": agreement["case_id"], "user_id": current_user["id"]}
+        {"id": agreement["case_id"], "user_id": current_user["id"]},
+        {"_id": 0},
     )
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    # Atualiza o acordo
-    await db.agreements.update_one(
-        {"id": agreement_id},
-        {
-            "$set": {
-                "total_value": payload.total_value,
-                "installments_count": payload.installments_count,
-                "installment_value": payload.installment_value,
-                "first_due_date": payload.first_due_date,
-                "has_entry": payload.has_entry,
-                "entry_value": payload.entry_value,
-                "entry_via_alvara": payload.entry_via_alvara,
-                "entry_date": payload.entry_date,
+    update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not update_data:
+        return {"message": "No changes to update"}
+    if update_data:
+        await db.agreements.update_one({"id": agreement_id}, {"$set": update_data})
+
+    effective_data = {**agreement, **update_data}
+
+    installments = await db.installments.find({"agreement_id": agreement_id}, {"_id": 0}).to_list(1000)
+    has_paid_installments = any(inst.get("paid_date") for inst in installments)
+
+    should_recreate_installments = False
+    if "installments_count" in update_data or "first_due_date" in update_data:
+        if has_paid_installments:
+            raise HTTPException(
+                status_code=400,
+                detail="Não é possível alterar parcelas quando já existem parcelas pagas.",
+            )
+        should_recreate_installments = True
+
+        if should_recreate_installments:
+        try:
+            first_due = datetime.strptime(effective_data["first_due_date"], "%Y-%m-%d")
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Data da 1ª parcela inválida.") from exc
+
+        if not effective_data.get("installments_count"):
+            raise HTTPException(status_code=400, detail="Número de parcelas inválido.")
+
+        # Mantém parcelas pagas e remove apenas as não pagas antes de recriar.
+        await db.installments.delete_many({"agreement_id": agreement_id, "paid_date": None})
+
+        for i in range(effective_data["installments_count"]):
+            due_date = first_due + relativedelta(months=i)
+            installment = {
+                "id": str(uuid.uuid4()),
+                "agreement_id": agreement_id,
+                "number": i + 1,
+                "is_entry": False,
+                "due_date": due_date.strftime("%Y-%m-%d"),
+                "paid_date": None,
+                "paid_value": None,
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
-        }
-    )
+            await db.installments.insert_one(installment)
 
-        # 2️⃣ Remove SOMENTE parcelas NÃO pagas
-    await db.installments.delete_many({
-        "agreement_id": agreement_id,
-        "paid_date": None
-    })
-
-    # 3️⃣ Recria parcelas futuras
-    from datetime import datetime
-    from dateutil.relativedelta import relativedelta
-
-    due_date = datetime.fromisoformat(data.first_due_date)
-
-    for i in range(1, data.installments_count + 1):
-        installment = {
-            "id": str(uuid.uuid4()),
-            "agreement_id": agreement_id,
-            "number": i,
-            "due_date": due_date.date().isoformat(),
-            "value": data.installment_value,
-            "paid_date": None,
-            "paid_value": None,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-        await db.installments.insert_one(installment)
-        due_date += relativedelta(months=1)
-
-    await update_case_materialized_fields(agreement["case_id"])
-
-    return {"message": "Agreement updated successfully"}
- 
-    # Buscar parcelas
-    installments = await db.installments.find(
-        {"agreement_id": agreement_id}
-    ).to_list(None)
-
-    # Filtrar parcelas NÃO pagas
-    unpaid_installments = [
-        inst for inst in installments
-        if inst.get("status_calc") != "Pago"
-    ]
-
-    # Recalcular vencimentos apenas das parcelas não pagas
-    due_date = datetime.fromisoformat(payload.first_due_date)
-
-    for inst in unpaid_installments:
-        await db.installments.update_one(
-            {"id": inst["id"]},
-            {
-                "$set": {
-                    "due_date": due_date.date().isoformat(),
-                    "value": payload.installment_value
+    if effective_data.get("has_entry"):
+        if effective_data.get("entry_via_alvara"):
+            # Decisão sensível: removemos apenas a entrada não paga para evitar duplicidade.
+            await db.installments.delete_many(
+                {"agreement_id": agreement_id, "is_entry": True, "paid_date": None}
+            )
+            entry_alvara = await db.alvaras.find_one(
+                {"case_id": agreement["case_id"], "observacoes": "Entrada via alvará"},
+                {"_id": 0},
+            )
+            if entry_alvara:
+                if entry_alvara.get("status_alvara") != "Alvará pago":
+                    alvara_update = {}
+                    if effective_data.get("entry_date"):
+                        alvara_update["data_alvara"] = effective_data["entry_date"]
+                    if effective_data.get("entry_value") is not None:
+                        alvara_update["valor_alvara"] = effective_data["entry_value"]
+                    if alvara_update:
+                        await db.alvaras.update_one({"id": entry_alvara["id"]}, {"$set": alvara_update})
+            else:
+                alvara_entry = {
+                    "id": str(uuid.uuid4()),
+                    "case_id": agreement["case_id"],
+                    "data_alvara": effective_data.get("entry_date")
+                    or datetime.now().strftime("%Y-%m-%d"),
+                    "valor_alvara": effective_data.get("entry_value") or 0.0,
+                    "beneficiario_codigo": case.get("polo_ativo_codigo"),
+                    "status_alvara": "Aguardando alvará",
+                    "observacoes": "Entrada via alvará",
+                    "created_at": datetime.now(timezone.utc).isoformat(),                    
                 }
+                await db.alvaras.insert_one(alvara_entry)
+        else:
+            entry_date = effective_data.get("entry_date")
+            if not entry_date:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Data da entrada é obrigatória quando não há alvará.",
+                )
+            entry_installment = await db.installments.find_one(
+                {"agreement_id": agreement_id, "is_entry": True},
+                {"_id": 0},
+            )
+            if entry_installment:
+                if entry_installment.get("paid_date") is None:
+                    await db.installments.update_one(
+                        {"id": entry_installment["id"]},
+                        {"$set": {"due_date": entry_date}},
+                    )
+            else:
+                entry_installment = {
+                    "id": str(uuid.uuid4()),
+                    "agreement_id": agreement_id,
+                    "is_entry": True,
+                    "number": None,
+                    "due_date": entry_date,
+                    "paid_date": None,
+                    "paid_value": None,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                await db.installments.insert_one(entry_installment)
+    elif update_data.get("has_entry") is False:
+        # Decisão sensível: limpamos registros de entrada ainda não pagos quando removidos pelo usuário.
+        await db.installments.delete_many(
+            {"agreement_id": agreement_id, "is_entry": True, "paid_date": None}
+        )
+        await db.alvaras.delete_many(
+            {
+                "case_id": agreement["case_id"],
+                "observacoes": "Entrada via alvará",
+                "status_alvara": {"$ne": "Alvará pago"},                
             }
         )
-        due_date = due_date.replace(month=due_date.month + 1)
 
     await update_case_materialized_fields(agreement["case_id"])
 
