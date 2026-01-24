@@ -184,6 +184,7 @@ export default function Cases({ token, setToken }) {
       const payload = {
         ...formData,
         value_causa: parseFloat(formData.value_causa),
+        email: formData.email?.trim() === '' ? null : formData.email,        
       };
 
       if (editingCase) {
