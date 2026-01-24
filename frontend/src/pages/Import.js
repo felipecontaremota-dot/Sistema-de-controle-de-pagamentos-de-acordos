@@ -43,6 +43,8 @@ const fieldSections = [
       { key: 'status_processo', label: 'Status do processo' },
       { key: 'data_matricula', label: 'Data de matrícula' },
       { key: 'cpf', label: 'CPF' },
+      { key: 'whatsapp', label: 'WhatsApp' },
+      { key: 'email', label: 'E-mail' },      
       { key: 'curso', label: 'Curso' },
     ],
   },
