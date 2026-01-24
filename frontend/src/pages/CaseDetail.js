@@ -50,6 +50,7 @@ export default function CaseDetail({ token, setToken }) {
     entry_value: '',
     entry_via_alvara: false,
     entry_date: '',
+    observation: '',    
     notes: '',    
   });
 
@@ -166,6 +167,7 @@ export default function CaseDetail({ token, setToken }) {
           entry_value: agreementForm.has_entry ? parseFloat(agreementForm.entry_value) : null,
           entry_via_alvara: agreementForm.entry_via_alvara,
           entry_date: agreementForm.has_entry ? agreementForm.entry_date : null,
+          observation: agreementForm.observation?.trim() || null,         
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -615,6 +617,7 @@ export default function CaseDetail({ token, setToken }) {
                             entry_value: data.agreement.entry_value || '',
                             entry_via_alvara: data.agreement.entry_via_alvara,
                             entry_date: data.agreement.entry_date || '',
+                            observation: data.agreement.observation || '',                            
                             notes: data.agreement.notes || '',                            
                           });
                         setEditAgreementDialogOpen(true);
@@ -674,6 +677,12 @@ export default function CaseDetail({ token, setToken }) {
                       </>
                     )}
                   </div>
+                  {data.agreement.observation && (
+                    <div className="pt-4 border-t border-slate-200">
+                      <p className="text-sm font-semibold text-slate-700">Observação</p>
+                      <p className="text-slate-600 whitespace-pre-wrap">{data.agreement.observation}</p>
+                    </div>
+                  )}                   
                 </div>
                     
 <Dialog
@@ -1022,6 +1031,22 @@ export default function CaseDetail({ token, setToken }) {
   </div>
 </div>
 
+                        <div>
+                          <Label htmlFor="observation">Observação</Label>
+                          <Textarea
+                            id="observation"
+                            value={agreementForm.observation}
+                            onChange={(e) =>
+                              setAgreementForm({
+                                ...agreementForm,
+                                observation: e.target.value,
+                              })
+                            }
+                            rows={3}
+                            placeholder="Digite aqui qualquer observação relevante sobre o acordo"
+                          />
+                        </div>
+            
                         <Button type="submit" className="w-full" disabled={loading} data-testid="submit-agreement-button">
                           {loading ? 'Criando...' : 'Criar Acordo'}
                         </Button>
