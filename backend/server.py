@@ -48,12 +48,8 @@ IMPORT_SESSIONS: dict[str, dict[str, Any]] = {}
 MAX_IMPORT_FILE_SIZE_MB = 10
 IMPORT_ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 
-IMPORT_REQUIRED_FIELDS = {
-    "case": ["debtor_name", "value_causa", "polo_ativo_text"],
-    "agreement": ["total_value", "installments_count", "installment_value", "first_due_date"],
-    "installment": ["number", "due_date"],
-    "alvara": ["valor_alvara", "beneficiario_codigo", "status_alvara"],
-}
+IMPORT_REQUIRED_FIELDS: dict[str, list[str]] = {}
+IMPORT_ENFORCE_REQUIRED_FIELDS = False
 
 class User(BaseModel):
     id: str
@@ -388,6 +384,8 @@ def load_import_dataframe(session: dict[str, Any]) -> pd.DataFrame:
 
 
 def build_mapping_errors(mapping: dict) -> list[dict[str, Any]]:
+    if not IMPORT_ENFORCE_REQUIRED_FIELDS:
+        return []    
     errors = []
     for section, required_fields in IMPORT_REQUIRED_FIELDS.items():
         for field in required_fields:
@@ -1178,75 +1176,49 @@ async def validate_import_file(
     columns = df.columns.tolist()
     mapping = payload.mapping or {}
 
-    errors = build_mapping_errors(mapping)
+    errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
-    invalid_rows = 0
 
     for index, row in df.iterrows():
         row_data = build_row_data(row, columns)
-        row_errors = []
-        for section, required_fields in IMPORT_REQUIRED_FIELDS.items():
-            section_mapping = mapping.get(section, {})
-            if not isinstance(section_mapping, dict):
-                continue
-            for field in required_fields:
-                column = section_mapping.get(field)
-                if column:
-                    value = row_data.get(column)
-                    if value in ("", None):
-                        row_errors.append({"row": index + 1, "message": f"Campo obrigatório vazio: {section}.{field}"})
-
-        if row_errors:
-            invalid_rows += 1
-            errors.extend(row_errors)
-            continue
-
         case_payload = build_row_payload(row_data, mapping.get("case", {}))
         agreement_payload = build_row_payload(row_data, mapping.get("agreement", {}))
         installment_payload = build_row_payload(row_data, mapping.get("installment", {}))
         alvara_payload = build_row_payload(row_data, mapping.get("alvara", {}))
 
-        if parse_float_value(case_payload.get("value_causa")) is None:
-            invalid_rows += 1
-            errors.append({"row": index + 1, "message": "Valor da causa inválido"})
-            continue
-        if parse_float_value(agreement_payload.get("total_value")) is None:
-            invalid_rows += 1
-            errors.append({"row": index + 1, "message": "Valor total do acordo inválido"})
-            continue
-        if parse_int_value(agreement_payload.get("installments_count")) is None:
-            invalid_rows += 1
-            errors.append({"row": index + 1, "message": "Quantidade de parcelas inválida"})
-            continue
-        if parse_float_value(agreement_payload.get("installment_value")) is None:
-            invalid_rows += 1
-            errors.append({"row": index + 1, "message": "Valor da parcela inválido"})
-            continue
-        if parse_date_value(agreement_payload.get("first_due_date")) is None:
-            invalid_rows += 1
-            errors.append({"row": index + 1, "message": "Primeiro vencimento inválido"})
-            continue
-        if parse_int_value(installment_payload.get("number")) is None:
-            invalid_rows += 1
-            errors.append({"row": index + 1, "message": "Número da parcela inválido"})
-            continue
-        if parse_date_value(installment_payload.get("due_date")) is None:
-            invalid_rows += 1
-            errors.append({"row": index + 1, "message": "Data de vencimento inválida"})
-            continue
-        if parse_float_value(alvara_payload.get("valor_alvara")) is None:
-            invalid_rows += 1
-            errors.append({"row": index + 1, "message": "Valor do alvará inválido"})
-            continue
+        if "value_causa" in case_payload and case_payload.get("value_causa") not in ("", None):
+            if parse_float_value(case_payload.get("value_causa")) is None:
+                warnings.append({"row": index + 1, "message": "Valor da causa inválido"})
+        if "total_value" in agreement_payload and agreement_payload.get("total_value") not in ("", None):
+            if parse_float_value(agreement_payload.get("total_value")) is None:
+                warnings.append({"row": index + 1, "message": "Valor total do acordo inválido"})
+        if "installments_count" in agreement_payload and agreement_payload.get("installments_count") not in ("", None):
+            if parse_int_value(agreement_payload.get("installments_count")) is None:
+                warnings.append({"row": index + 1, "message": "Quantidade de parcelas inválida"})
+        if "installment_value" in agreement_payload and agreement_payload.get("installment_value") not in ("", None):
+            if parse_float_value(agreement_payload.get("installment_value")) is None:
+                warnings.append({"row": index + 1, "message": "Valor da parcela inválida"})
+        if "first_due_date" in agreement_payload and agreement_payload.get("first_due_date") not in ("", None):
+            if parse_date_value(agreement_payload.get("first_due_date")) is None:
+                warnings.append({"row": index + 1, "message": "Primeiro vencimento inválido"})
+        if "number" in installment_payload and installment_payload.get("number") not in ("", None):
+            if parse_int_value(installment_payload.get("number")) is None:
+                warnings.append({"row": index + 1, "message": "Número da parcela inválido"})
+        if "due_date" in installment_payload and installment_payload.get("due_date") not in ("", None):
+            if parse_date_value(installment_payload.get("due_date")) is None:
+                warnings.append({"row": index + 1, "message": "Data de vencimento inválida"})
+        if "valor_alvara" in alvara_payload and alvara_payload.get("valor_alvara") not in ("", None):
+            if parse_float_value(alvara_payload.get("valor_alvara")) is None:
+                warnings.append({"row": index + 1, "message": "Valor do alvará inválido"})
 
     total_rows = int(len(df.index))
-    valid_rows = max(0, total_rows - invalid_rows)
+    valid_rows = total_rows
 
     return {
         "summary": {
             "total_rows": total_rows,
             "valid_rows": valid_rows,
-            "invalid_rows": invalid_rows
+            "invalid_rows": 0
         },
         "errors": errors,
         "warnings": warnings
@@ -1263,13 +1235,6 @@ async def commit_import_file(
     columns = df.columns.tolist()
     mapping = payload.mapping or {}
 
-    mapping_errors = build_mapping_errors(mapping)
-    if mapping_errors:
-        raise HTTPException(
-            status_code=400,
-            detail={"message": "Mapeamento inválido", "errors": mapping_errors}
-        )
-
     case_cache: dict[str, dict[str, Any]] = {}
     agreement_cache: dict[str, dict[str, Any]] = {}
     totals = {"cases": 0, "agreements": 0, "installments": 0, "alvaras": 0}
@@ -1280,160 +1245,131 @@ async def commit_import_file(
         row_data = build_row_data(row, columns)
         row_number = index + 1
 
-        row_errors = []
-        for section, required_fields in IMPORT_REQUIRED_FIELDS.items():
-            section_mapping = mapping.get(section, {})
-            if not isinstance(section_mapping, dict):
-                continue
-            for field in required_fields:
-                column = section_mapping.get(field)
-                if column:
-                    value = row_data.get(column)
-                    if value in ("", None):
-                        row_errors.append(f"Campo obrigatório vazio: {section}.{field}")
-
-        if row_errors:
-            results.append({
-                "row": row_number,
-                "status": "Erro",
-                "message": "; ".join(row_errors)
-            })
-            continue
-
         case_payload = build_row_payload(row_data, mapping.get("case", {}))
         agreement_payload = build_row_payload(row_data, mapping.get("agreement", {}))
         installment_payload = build_row_payload(row_data, mapping.get("installment", {}))
         alvara_payload = build_row_payload(row_data, mapping.get("alvara", {}))
 
-        case_value_causa = parse_float_value(case_payload.get("value_causa"))
-        agreement_total_value = parse_float_value(agreement_payload.get("total_value"))
-        agreement_installments_count = parse_int_value(agreement_payload.get("installments_count"))
-        agreement_installment_value = parse_float_value(agreement_payload.get("installment_value"))
-        agreement_first_due = parse_date_value(agreement_payload.get("first_due_date"))
-        installment_number = parse_int_value(installment_payload.get("number"))
-        installment_due_date = parse_date_value(installment_payload.get("due_date"))
-        alvara_value = parse_float_value(alvara_payload.get("valor_alvara"))
+        case_record = None
+        has_case_payload = any(value not in ("", None) for value in case_payload.values())
+        if has_case_payload:
+            case_value_causa = parse_float_value(case_payload.get("value_causa")) or 0.0
+            case_internal_id = str(case_payload.get("internal_id") or "").strip()
+            case_key = case_internal_id or str(case_payload.get("debtor_name") or "").strip()
+            case_cache_key = f"{current_user['id']}::{case_key}" if case_key else None
+            if case_cache_key:
+                case_record = case_cache.get(case_cache_key)
+            if not case_record:
+                case_id = str(uuid.uuid4())
+                case_record = {
+                    "id": case_id,
+                    "user_id": current_user["id"],
+                    "debtor_name": str(case_payload.get("debtor_name") or ""),
+                    "internal_id": case_internal_id or str(uuid.uuid4()),
+                    "value_causa": case_value_causa,
+                    "polo_ativo_text": str(case_payload.get("polo_ativo_text") or ""),
+                    "notes": str(case_payload.get("notes") or ""),
+                    "numero_processo": str(case_payload.get("numero_processo") or ""),
+                    "data_protocolo": str(case_payload.get("data_protocolo") or ""),
+                    "status_processo": str(case_payload.get("status_processo") or ""),
+                    "data_matricula": str(case_payload.get("data_matricula") or ""),
+                    "cpf": str(case_payload.get("cpf") or ""),
+                    "whatsapp": str(case_payload.get("whatsapp") or ""),
+                    "email": case_payload.get("email"),
+                    "curso": str(case_payload.get("curso") or ""),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "polo_ativo_codigo": extract_beneficiary_code(case_payload.get("polo_ativo_text")),
+                    "has_agreement": False,
+                    "status_acordo": "",
+                    "total_received": 0.0,
+                    "percent_recovered": 0.0
+                }
+                await db.cases.insert_one(case_record)
+                if case_cache_key:
+                    case_cache[case_cache_key] = case_record
+                totals["cases"] += 1
 
-        if None in (
-            case_value_causa,
-            agreement_total_value,
-            agreement_installments_count,
-            agreement_installment_value,
-            agreement_first_due,
-            installment_number,
-            installment_due_date,
-            alvara_value
-        ):
-            results.append({
-                "row": row_number,
-                "status": "Erro",
-                "message": "Dados inválidos ou incompletos"
-            })
-            continue
+        agreement_record = None
+        has_agreement_payload = any(value not in ("", None) for value in agreement_payload.values())
+        if case_record and has_agreement_payload:
+            agreement_total_value = parse_float_value(agreement_payload.get("total_value")) or 0.0
+            agreement_installments_count = parse_int_value(agreement_payload.get("installments_count")) or 0
+            agreement_installment_value = parse_float_value(agreement_payload.get("installment_value")) or 0.0
+            agreement_first_due = parse_date_value(agreement_payload.get("first_due_date")) or ""
+            agreement_key = json.dumps(
+                {
+                    "case_id": case_record["id"],
+                    "total_value": agreement_total_value,
+                    "installments_count": agreement_installments_count,
+                    "installment_value": agreement_installment_value,
+                    "first_due_date": agreement_first_due,
+                    "has_entry": parse_bool_value(agreement_payload.get("has_entry")),
+                    "entry_value": parse_float_value(agreement_payload.get("entry_value")) or 0.0,
+                    "entry_via_alvara": parse_bool_value(agreement_payload.get("entry_via_alvara")) or False,
+                    "entry_date": parse_date_value(agreement_payload.get("entry_date")),
+                },
+                sort_keys=True
+            )
+            agreement_record = agreement_cache.get(agreement_key)
+            if not agreement_record:
+                agreement_record = {
+                    "id": str(uuid.uuid4()),
+                    "case_id": case_record["id"],
+                    "total_value": agreement_total_value,
+                    "installments_count": agreement_installments_count,
+                    "installment_value": agreement_installment_value,
+                    "first_due_date": agreement_first_due,
+                    "observation": agreement_payload.get("observation"),
+                    "has_entry": parse_bool_value(agreement_payload.get("has_entry")) or False,
+                    "entry_value": parse_float_value(agreement_payload.get("entry_value")) or 0.0,
+                    "entry_via_alvara": parse_bool_value(agreement_payload.get("entry_via_alvara")) or False,
+                    "entry_date": parse_date_value(agreement_payload.get("entry_date")),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                await db.agreements.insert_one(agreement_record)
+                agreement_cache[agreement_key] = agreement_record
+                totals["agreements"] += 1
 
-        case_internal_id = str(case_payload.get("internal_id") or "").strip()
-        case_key = case_internal_id or str(case_payload.get("debtor_name") or "").strip()
-        case_cache_key = f"{current_user['id']}::{case_key}"
-
-        case_record = case_cache.get(case_cache_key)
-        if not case_record:
-            case_id = str(uuid.uuid4())
-            case_record = {
-                "id": case_id,
-                "user_id": current_user["id"],
-                "debtor_name": str(case_payload.get("debtor_name") or ""),
-                "internal_id": case_internal_id or str(uuid.uuid4()),
-                "value_causa": case_value_causa,
-                "polo_ativo_text": str(case_payload.get("polo_ativo_text") or ""),
-                "notes": str(case_payload.get("notes") or ""),
-                "numero_processo": str(case_payload.get("numero_processo") or ""),
-                "data_protocolo": str(case_payload.get("data_protocolo") or ""),
-                "status_processo": str(case_payload.get("status_processo") or ""),
-                "data_matricula": str(case_payload.get("data_matricula") or ""),
-                "cpf": str(case_payload.get("cpf") or ""),
-                "whatsapp": str(case_payload.get("whatsapp") or ""),
-                "email": case_payload.get("email"),
-                "curso": str(case_payload.get("curso") or ""),
+        has_installment_payload = any(value not in ("", None) for value in installment_payload.values())
+        if agreement_record and has_installment_payload:
+            installment_record = {
+                "id": str(uuid.uuid4()),
+                "agreement_id": agreement_record["id"],
+                "is_entry": parse_bool_value(installment_payload.get("is_entry")) or False,
+                "number": parse_int_value(installment_payload.get("number")),
+                "due_date": parse_date_value(installment_payload.get("due_date")) or "",
+                "paid_date": parse_date_value(installment_payload.get("paid_date")),
+                "paid_value": parse_float_value(installment_payload.get("paid_value")),
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "polo_ativo_codigo": extract_beneficiary_code(case_payload.get("polo_ativo_text")),
-                "has_agreement": False,
-                "status_acordo": "",
-                "total_received": 0.0,
-                "percent_recovered": 0.0
             }
-            await db.cases.insert_one(case_record)
-            case_cache[case_cache_key] = case_record
-            totals["cases"] += 1
+            await db.installments.insert_one(installment_record)
+            totals["installments"] += 1
 
-        agreement_key = json.dumps(
-            {
-                "case_id": case_record["id"],
-                "total_value": agreement_total_value,
-                "installments_count": agreement_installments_count,
-                "installment_value": agreement_installment_value,
-                "first_due_date": agreement_first_due,
-                "has_entry": parse_bool_value(agreement_payload.get("has_entry")),
-                "entry_value": parse_float_value(agreement_payload.get("entry_value")) or 0.0,
-                "entry_via_alvara": parse_bool_value(agreement_payload.get("entry_via_alvara")) or False,
-                "entry_date": parse_date_value(agreement_payload.get("entry_date")),
-            },
-            sort_keys=True
-        )
-
-        agreement_record = agreement_cache.get(agreement_key)
-        if not agreement_record:
-            agreement_record = {
+        has_alvara_payload = any(value not in ("", None) for value in alvara_payload.values())
+        if case_record and has_alvara_payload:
+            alvara_value = parse_float_value(alvara_payload.get("valor_alvara")) or 0.0
+            alvara_record = {
                 "id": str(uuid.uuid4()),
                 "case_id": case_record["id"],
-                "total_value": agreement_total_value,
-                "installments_count": agreement_installments_count,
-                "installment_value": agreement_installment_value,
-                "first_due_date": agreement_first_due,
-                "observation": agreement_payload.get("observation"),
-                "has_entry": parse_bool_value(agreement_payload.get("has_entry")) or False,
-                "entry_value": parse_float_value(agreement_payload.get("entry_value")) or 0.0,
-                "entry_via_alvara": parse_bool_value(agreement_payload.get("entry_via_alvara")) or False,
-                "entry_date": parse_date_value(agreement_payload.get("entry_date")),
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "data_alvara": parse_date_value(alvara_payload.get("data_alvara")) or "",
+                "valor_alvara": alvara_value,
+                "beneficiario_codigo": str(alvara_payload.get("beneficiario_codigo") or ""),
+                "observacoes": alvara_payload.get("observacoes"),
+                "status_alvara": str(alvara_payload.get("status_alvara") or ""),
+                "user_id": current_user["id"],
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+                "status": "aguardando",
             }
-            await db.agreements.insert_one(agreement_record)
-            agreement_cache[agreement_key] = agreement_record
-            totals["agreements"] += 1
+            await db.alvaras.insert_one(alvara_record)
+            totals["alvaras"] += 1
 
-        installment_record = {
-            "id": str(uuid.uuid4()),
-            "agreement_id": agreement_record["id"],
-            "is_entry": parse_bool_value(installment_payload.get("is_entry")) or False,
-            "number": installment_number,
-            "due_date": installment_due_date,
-            "paid_date": parse_date_value(installment_payload.get("paid_date")),
-            "paid_value": parse_float_value(installment_payload.get("paid_value")),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.installments.insert_one(installment_record)
-        totals["installments"] += 1
-
-        alvara_record = {
-            "id": str(uuid.uuid4()),
-            "case_id": case_record["id"],
-            "data_alvara": parse_date_value(alvara_payload.get("data_alvara")) or "",
-            "valor_alvara": alvara_value,
-            "beneficiario_codigo": str(alvara_payload.get("beneficiario_codigo") or ""),
-            "observacoes": alvara_payload.get("observacoes"),
-            "status_alvara": str(alvara_payload.get("status_alvara") or ""),
-            "user_id": current_user["id"],
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-            "status": "aguardando",
-        }
-        await db.alvaras.insert_one(alvara_record)
-        totals["alvaras"] += 1
-
-        updated_case_ids.add(case_record["id"])
+        if case_record:
+            updated_case_ids.add(case_record["id"])
         results.append({
             "row": row_number,
             "status": "Sucesso",
-            "message": "Linha importada com sucesso"
+            "message": "Linha processada com sucesso"
         })
 
     for case_id in updated_case_ids:
