@@ -708,7 +708,6 @@ async def update_installment(installment_id: str, update_data: InstallmentUpdate
     await update_case_materialized_fields(agreement["case_id"])
     return updated_installment
 
-
 @api_router.get("/alvaras")
 async def list_alvaras(case_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     query = {}
@@ -717,6 +716,42 @@ async def list_alvaras(case_id: Optional[str] = None, current_user: dict = Depen
     alvaras = await db.alvaras.find(query, {"_id": 0}).to_list(1000)
     return alvaras
 
+
+@api_router.get("/alvaras/pendentes")
+async def list_alvaras_pendentes(current_user: dict = Depends(get_current_user)):
+    cases = await db.cases.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "id": 1, "debtor_name": 1, "numero_processo": 1},
+    ).to_list(1000)
+
+    case_map = {case["id"]: case for case in cases}
+    if not case_map:
+        return []
+
+    alvaras = await db.alvaras.find(
+        {"case_id": {"$in": list(case_map.keys())}, "status_alvara": "Aguardando alvará"},
+        {"_id": 0},
+    ).to_list(1000)
+
+    result = []
+    for alvara in alvaras:
+        case = case_map.get(alvara.get("case_id"))
+        if not case:
+            continue
+        result.append(
+            {
+                "alvara_id": alvara.get("id"),
+                "case_id": alvara.get("case_id"),
+                "data": alvara.get("data_alvara"),
+                "devedor": case.get("debtor_name", ""),
+                "numero_processo": case.get("numero_processo", ""),
+                "valor": alvara.get("valor_alvara", 0.0),
+                "beneficiario": alvara.get("beneficiario_codigo"),
+                "observacoes": alvara.get("observacoes"),
+            }
+        )
+
+    return result
 
 @api_router.post("/alvaras")
 async def create_alvara(
