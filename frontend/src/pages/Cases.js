@@ -49,6 +49,7 @@ export default function Cases({ token, setToken }) {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalCases, setTotalCases] = useState(0);  
   
   const [formData, setFormData] = useState({
     debtor_name: '',
@@ -91,6 +92,7 @@ export default function Cases({ token, setToken }) {
       setCases(data);
       const nextTotalPages = pagination?.total_pages ?? 1;
       setTotalPages(nextTotalPages);
+      setTotalCases(pagination?.total ?? 0);      
       if (page > nextTotalPages) {
         setPage(nextTotalPages);
       }
@@ -332,6 +334,7 @@ export default function Cases({ token, setToken }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h2 className="text-3xl font-bold text-slate-900">Casos</h2>
+              <p className="text-sm text-slate-500 mt-1">Total de casos cadastrados: {totalCases}</p>                  
               <p className="text-sm text-slate-600 mt-1">Gerencie seus casos e acordos judiciais</p>
             </div>
 
