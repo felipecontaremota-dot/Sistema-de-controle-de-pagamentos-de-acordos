@@ -46,7 +46,10 @@ export default function Cases({ token, setToken }) {
   const [editingCase, setEditingCase] = useState(null);
   const [deleteCaseDialogOpen, setDeleteCaseDialogOpen] = useState(false);
   const [caseToDelete, setCaseToDelete] = useState(null);
-
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  
   const [formData, setFormData] = useState({
     debtor_name: '',
     internal_id: '',
@@ -75,12 +78,20 @@ export default function Cases({ token, setToken }) {
       if (statusFilter && statusFilter !== 'all') params.append('status_acordo', statusFilter);
       if (beneficiaryFilter && beneficiaryFilter !== 'all') params.append('beneficiario', beneficiaryFilter);
       if (statusProcessoFilter && statusProcessoFilter !== 'all') params.append('status_processo', statusProcessoFilter);
-
+      params.append('page', page.toString());
+      params.append('limit', limit.toString());
+      
       const response = await api.get(`/cases?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setCases(response.data);
+      const { data, pagination } = response.data;
+      setCases(data);
+      const nextTotalPages = pagination?.total_pages ?? 1;
+      setTotalPages(nextTotalPages);
+      if (page > nextTotalPages) {
+        setPage(nextTotalPages);
+      }
     } catch (error) {
       if (error.response?.status === 401) {
         handleUnauthorized();
@@ -93,7 +104,7 @@ export default function Cases({ token, setToken }) {
   useEffect(() => {
     fetchCases();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, beneficiaryFilter, statusProcessoFilter]);
+  }, [search, statusFilter, beneficiaryFilter, statusProcessoFilter, sortOption, page, limit]);
 
   const openCreateDialog = () => {
     setEditingCase(null);
@@ -193,6 +204,14 @@ export default function Cases({ token, setToken }) {
     navigate('/login');
   };
 
+  const handleLimitChange = (value) => {
+    const parsedLimit = Number(value);
+    if (!Number.isNaN(parsedLimit)) {
+      setLimit(parsedLimit);
+      setPage(1);
+    }
+  };  
+  
   const getStatusBadge = (status) => {
     const statusConfig = {
   Quitado: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
@@ -698,6 +717,48 @@ export default function Cases({ token, setToken }) {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-200">
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="limit-select" className="text-sm text-slate-600">
+                Linhas por página
+              </Label>
+              <Select value={limit.toString()} onValueChange={handleLimitChange}>
+                <SelectTrigger id="limit-select" className="w-[120px]" data-testid="limit-select">
+                  <SelectValue placeholder="10" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 50, 100].map((size) => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <Button
+                variant="outline"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                data-testid="previous-page"
+              >
+                Anterior
+              </Button>
+              <span className="text-sm text-slate-600" data-testid="page-indicator">
+                Página {page} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page >= totalPages}
+                data-testid="next-page"
+              >
+                Próxima
+              </Button>
+            </div>
           </div>
 
           {sortedCases.length === 0 && (
