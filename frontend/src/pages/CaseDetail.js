@@ -51,7 +51,6 @@ export default function CaseDetail({ token, setToken }) {
     entry_via_alvara: false,
     entry_date: '',
     observation: '',    
-    notes: '',    
   });
 
   const [paymentForm, setPaymentForm] = useState({
@@ -419,9 +418,10 @@ export default function CaseDetail({ token, setToken }) {
       }
     }
 
-    const notesValue = agreementForm.notes ?? '';
-    if (notesValue !== (original.notes ?? '')) {
-      payload.notes = notesValue;
+    const observationValue = agreementForm.observation?.trim() || null;
+    const originalObservation = original.observation ?? null;
+    if (observationValue !== originalObservation) {
+      payload.observation = observationValue;
     }
 
     if (Object.keys(payload).length === 0) {
@@ -618,7 +618,6 @@ export default function CaseDetail({ token, setToken }) {
                             entry_via_alvara: data.agreement.entry_via_alvara,
                             entry_date: data.agreement.entry_date || '',
                             observation: data.agreement.observation || '',                            
-                            notes: data.agreement.notes || '',                            
                           });
                         setEditAgreementDialogOpen(true);
                     }}
@@ -837,18 +836,18 @@ export default function CaseDetail({ token, setToken }) {
       </div>
 
       <div>
-        <Label htmlFor="edit_notes">Observações</Label>
+        <Label htmlFor="edit_observation">Observação</Label>
         <Textarea
-          id="edit_notes"
-          value={agreementForm.notes}
+          id="edit_observation"
+          value={agreementForm.observation}
           onChange={(e) =>
             setAgreementForm({
               ...agreementForm,
-              notes: e.target.value,
+              observation: e.target.value,
             })
           }
           rows={3}
-          placeholder="Observações adicionais sobre o acordo"
+          placeholder="Digite aqui qualquer observação relevante sobre o acordo"
         />
       </div>
 
