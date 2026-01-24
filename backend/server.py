@@ -388,6 +388,7 @@ async def get_case(case_id: str, current_user: dict = Depends(get_current_user))
     installments = []
 
     if agreement:
+        agreement["observation"] = agreement.get("observation")        
         installments = await db.installments.find({"agreement_id": agreement["id"]}, {"_id": 0}).to_list(1000)
         for inst in installments:
             inst["status_calc"] = calculate_installment_status(inst["due_date"], inst.get("paid_date"))
