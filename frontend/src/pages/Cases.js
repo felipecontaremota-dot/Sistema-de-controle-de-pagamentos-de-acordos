@@ -61,6 +61,8 @@ export default function Cases({ token, setToken }) {
     status_processo: '',
     data_matricula: '',
     cpf: '',
+    whatsapp: '',
+    email: '',    
     curso: '',
   });
 
@@ -119,6 +121,8 @@ export default function Cases({ token, setToken }) {
       status_processo: '',
       data_matricula: '',
       cpf: '',
+      whatsapp: '',
+      email: '',      
       curso: '',
     });
     setDialogOpen(true);
@@ -137,6 +141,8 @@ export default function Cases({ token, setToken }) {
       status_processo: caseData.status_processo || '',
       data_matricula: caseData.data_matricula || '',
       cpf: caseData.cpf || '',
+      whatsapp: caseData.whatsapp || '',
+      email: caseData.email || '',
       curso: caseData.curso || '',
     });
     setDialogOpen(true);
@@ -378,6 +384,33 @@ export default function Cases({ token, setToken }) {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="whatsapp">WhatsApp</Label>
+                      <Input
+                        id="whatsapp"
+                        value={formData.whatsapp}
+                        onChange={(e) =>
+                          setFormData({ ...formData, whatsapp: e.target.value })
+                        }
+                        placeholder="(62) 9 9999-9999"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="email">E-mail</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) =>
+                          setFormData({ ...formData, email: e.target.value })
+                        }
+                        placeholder="email@exemplo.com"
+                      />
+                    </div>
+                  </div>
+                          
                   <div className="border-t pt-4">
                     <h3 className="font-semibold text-slate-900 mb-3">Dados do Processo</h3>
                     <div className="grid grid-cols-2 gap-4">
