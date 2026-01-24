@@ -76,6 +76,8 @@ export default function Cases({ token, setToken }) {
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCases, setTotalCases] = useState(0);  
+  const [editingStatusId, setEditingStatusId] = useState(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   
   const [formData, setFormData] = useState({
     debtor_name: '',
@@ -237,6 +239,29 @@ export default function Cases({ token, setToken }) {
   const handleLogout = () => {
     setToken(null);
     navigate('/login');
+  };
+
+  const handleInlineStatusUpdate = async (caseId, newStatus) => {
+    try {
+      setUpdatingStatus(true);
+
+      await api.put(
+        `/cases/${caseId}`,
+        { status_processo: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setCases((prev) =>
+        prev.map((c) => (c.id === caseId ? { ...c, status_processo: newStatus } : c))
+      );
+
+      toast.success('Status do processo atualizado');
+    } catch (error) {
+      toast.error('Erro ao atualizar status do processo');
+    } finally {
+      setEditingStatusId(null);
+      setUpdatingStatus(false);
+    }
   };
 
   const handleLimitChange = (value) => {
@@ -705,19 +730,38 @@ export default function Cases({ token, setToken }) {
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      {case_.status_processo ? (
+                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      {editingStatusId === case_.id ? (
+                        <Select
+                          value={case_.status_processo}
+                          onValueChange={(value) => handleInlineStatusUpdate(case_.id, value)}
+                          disabled={updatingStatus}
+                        >
+                          <SelectTrigger className="h-8 px-2 text-xs border-none shadow-none focus:ring-0 [&>svg]:hidden">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STATUS_PROCESSO_OPTIONS.map((status) => (
+                              <SelectItem key={status} value={status}>
+                                {status}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
                         <Badge
                           variant="outline"
-                          className={
+                          className={`cursor-pointer ${
                             STATUS_PROCESSO_STYLES[case_.status_processo] ||
                             'bg-slate-100 text-slate-700 border-slate-200'
-                          }
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingStatusId(case_.id);
+                          }}
                         >
                           {case_.status_processo}
                         </Badge>
-                      ) : (
-                        <span className="text-slate-400 text-xs">-</span>
                       )}
                     </td>
 
