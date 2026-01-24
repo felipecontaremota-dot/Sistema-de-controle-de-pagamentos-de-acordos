@@ -741,6 +741,14 @@ export default function Cases({ token, setToken }) {
             <div className="flex items-center space-x-3">
               <Button
                 variant="outline"
+                onClick={() => setPage(1)}
+                disabled={page === 1}
+                data-testid="first-page"
+              >
+                Primeira
+              </Button>                  
+              <Button
+                variant="outline"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={page === 1}
                 data-testid="previous-page"
@@ -758,6 +766,14 @@ export default function Cases({ token, setToken }) {
               >
                 Próxima
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setPage(totalPages)}
+                disabled={page >= totalPages}
+                data-testid="last-page"
+              >
+                Última
+              </Button>    
             </div>
           </div>
 
