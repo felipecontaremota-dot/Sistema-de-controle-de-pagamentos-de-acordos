@@ -330,10 +330,23 @@ export default function Cases({ token, setToken }) {
     }
   }, [cases, sortOption]);
 
-  const getDisplayedStatusProcesso = (case_) => {
-    if (case_.status_acordo && case_.status_acordo !== 'Sem acordo') {
+  const getDerivedStatusProcesso = (case_) => {
+    const hasAgreement = case_.status_acordo && case_.status_acordo !== 'Sem acordo';
+    const allInstallmentsPaid = case_.percent_recovered >= 100;
+    const hasPendingAlvara =
+      Array.isArray(case_.alvaras) &&
+      case_.alvaras.some((a) => a.status === 'Aguardando alvará');
+
+    if (hasAgreement) {
+      if (allInstallmentsPaid) {
+        if (hasPendingAlvara) {
+          return 'Aguardando alvará';
+        }
+        return 'Sucesso';
+      }
       return 'Acordo';
     }
+    
     return case_.status_processo;
   };
 
@@ -739,13 +752,13 @@ export default function Cases({ token, setToken }) {
 
                     <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                       {(() => {
-                        const displayedStatus = getDisplayedStatusProcesso(case_);
-                        const hasAgreement = case_.status_acordo && case_.status_acordo !== 'Sem acordo';
+                        const derivedStatus = getDerivedStatusProcesso(case_);
+                        const canEditStatus = !case_.status_acordo;
 
-                        if (editingStatusId === case_.id && !hasAgreement) {
+                        if (editingStatusId === case_.id && canEditStatus) {
                           return (
                             <Select
-                              value={displayedStatus}
+                              value={case_.status_processo}
                               onValueChange={(value) =>
                                 handleInlineStatusUpdate(case_.id, value)
                               }
@@ -768,18 +781,18 @@ export default function Cases({ token, setToken }) {
                         return (
                           <Badge
                             variant="outline"
-                            className={`cursor-pointer ${
-                              STATUS_PROCESSO_STYLES[displayedStatus] ||
+                            className={`${
+                              STATUS_PROCESSO_STYLES[derivedStatus] ||
                               'bg-slate-100 text-slate-700 border-slate-200'
-                            }`}
+                            } ${canEditStatus ? 'cursor-pointer' : 'cursor-default'}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (!hasAgreement) {
+                              if (canEditStatus) {
                                 setEditingStatusId(case_.id);
                               }
                             }}
                           >
-                            {displayedStatus}
+                            {derivedStatus}
                           </Badge>
                         );
                       })()}
