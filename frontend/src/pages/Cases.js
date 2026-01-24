@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -78,6 +79,14 @@ export default function Cases({ token, setToken }) {
   const [totalCases, setTotalCases] = useState(0);  
   const [editingStatusId, setEditingStatusId] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [selectedCases, setSelectedCases] = useState([]);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkEditData, setBulkEditData] = useState({
+    status_processo: '',
+    polo_ativo_text: '',
+    status_acordo: '',
+  });  
   
   const [formData, setFormData] = useState({
     debtor_name: '',
@@ -138,6 +147,10 @@ export default function Cases({ token, setToken }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, statusFilter, beneficiaryFilter, statusProcessoFilter, sortOption, page, limit]);
 
+  useEffect(() => {
+    setSelectedCases([]);
+  }, [search, statusFilter, beneficiaryFilter, statusProcessoFilter, page, limit, sortOption]);
+  
   const openCreateDialog = () => {
     setEditingCase(null);
     setFormData({
@@ -158,6 +171,15 @@ export default function Cases({ token, setToken }) {
     setDialogOpen(true);
   };
 
+  const openBulkEditDialog = () => {
+    setBulkEditData({
+      status_processo: '',
+      polo_ativo_text: '',
+      status_acordo: '',
+    });
+    setBulkEditOpen(true);
+  };
+  
   const openEditDialog = (caseData) => {
     setEditingCase(caseData);
     setFormData({
@@ -176,6 +198,77 @@ export default function Cases({ token, setToken }) {
       curso: caseData.curso || '',
     });
     setDialogOpen(true);
+  };
+
+  const handleBulkUpdate = async () => {
+    if (selectedCases.length === 0) {
+      return;
+    }
+
+    const updates = {};
+    if (bulkEditData.status_processo) {
+      updates.status_processo = bulkEditData.status_processo;
+    }
+    if (bulkEditData.polo_ativo_text) {
+      updates.polo_ativo_text = bulkEditData.polo_ativo_text;
+    }
+    if (bulkEditData.status_acordo) {
+      updates.status_acordo = bulkEditData.status_acordo;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      toast.error('Preencha ao menos um campo para edição em lote.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await api.put(
+        '/cases/bulk-update',
+        { case_ids: selectedCases, updates },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Casos atualizados com sucesso!');
+      setBulkEditOpen(false);
+      setSelectedCases([]);
+      fetchCases();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error(error.response?.data?.detail || 'Erro ao atualizar casos');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedCases.length === 0) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await api.delete('/cases/bulk-delete', {
+        data: { case_ids: selectedCases },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success('Casos excluídos com sucesso!');
+      setBulkDeleteOpen(false);
+      setSelectedCases([]);
+      fetchCases();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error(error.response?.data?.detail || 'Erro ao excluir casos');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -329,6 +422,11 @@ export default function Cases({ token, setToken }) {
         return casesCopy;
     }
   }, [cases, sortOption]);
+
+  const pageCaseIds = useMemo(() => sortedCases.map((case_) => case_.id), [sortedCases]);
+  const allCasesSelected =
+    pageCaseIds.length > 0 && pageCaseIds.every((caseId) => selectedCases.includes(caseId));
+  const someCasesSelected = selectedCases.length > 0 && !allCasesSelected;
 
   const getDerivedStatusProcesso = (case_) => {
     const hasAgreement = case_.status_acordo && case_.status_acordo !== 'Sem acordo';
@@ -699,6 +797,36 @@ export default function Cases({ token, setToken }) {
           </div>
         </div>
 
+        {selectedCases.length > 0 && (
+          <div className="mb-6 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-sm font-medium text-slate-700">
+                {selectedCases.length} caso{selectedCases.length === 1 ? '' : 's'} selecionado
+                {selectedCases.length === 1 ? '' : 's'}
+              </span>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="outline"
+                  onClick={openBulkEditDialog}
+                  disabled={loading}
+                  data-testid="bulk-edit-button"
+                >
+                  Editar selecionados
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-rose-600 hover:bg-rose-50"
+                  onClick={() => setBulkDeleteOpen(true)}
+                  disabled={loading}
+                  data-testid="bulk-delete-button"
+                >
+                  Excluir selecionados
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+                    
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden w-full">
           <div className="overflow-x-auto w-full">
             <table className="min-w-full w-full" data-testid="cases-table">
@@ -728,6 +856,22 @@ export default function Cases({ token, setToken }) {
                   <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Ações
                   </th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={allCasesSelected ? true : someCasesSelected ? 'indeterminate' : false}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedCases(pageCaseIds);
+                          } else {
+                            setSelectedCases([]);
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label="Selecionar todos os casos"
+                      />
+                    </div>
+                  </th>                    
                 </tr>
               </thead>
 
@@ -858,6 +1002,22 @@ export default function Cases({ token, setToken }) {
                         </Button>
                       </div>
                     </td>
+                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-center">
+                        <Checkbox
+                          checked={selectedCases.includes(case_.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedCases((prev) => {
+                              if (checked) {
+                                return prev.includes(case_.id) ? prev : [...prev, case_.id];
+                              }
+                              return prev.filter((caseId) => caseId !== case_.id);
+                            });
+                          }}
+                          aria-label={`Selecionar caso ${case_.debtor_name}`}
+                        />
+                      </div>
+                    </td>                          
                   </tr>
                 ))}
               </tbody>
@@ -948,6 +1108,99 @@ export default function Cases({ token, setToken }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+          
+      <Dialog open={bulkEditOpen} onOpenChange={setBulkEditOpen}>
+        <DialogContent className="max-w-lg" data-testid="bulk-edit-dialog">
+          <DialogHeader>
+            <DialogTitle>Editar casos selecionados</DialogTitle>
+            <DialogDescription>Defina apenas os campos que deseja atualizar.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="bulk-status-processo">Status do processo</Label>
+              <Select
+                value={bulkEditData.status_processo || undefined}
+                onValueChange={(value) =>
+                  setBulkEditData((prev) => ({ ...prev, status_processo: value }))
+                }
+              >
+                <SelectTrigger id="bulk-status-processo" className="mt-1">
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_PROCESSO_OPTIONS.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="bulk-beneficiary">Beneficiário</Label>
+              <Select
+                value={bulkEditData.polo_ativo_text || undefined}
+                onValueChange={(value) =>
+                  setBulkEditData((prev) => ({ ...prev, polo_ativo_text: value }))
+                }
+              >
+                <SelectTrigger id="bulk-beneficiary" className="mt-1">
+                  <SelectValue placeholder="Selecione o beneficiário" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="31">31</SelectItem>
+                  <SelectItem value="14">14</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="bulk-status-acordo">Status do acordo</Label>
+              <Select
+                value={bulkEditData.status_acordo || undefined}
+                onValueChange={(value) =>
+                  setBulkEditData((prev) => ({ ...prev, status_acordo: value }))
+                }
+              >
+                <SelectTrigger id="bulk-status-acordo" className="mt-1">
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Quitado">Quitado</SelectItem>
+                  <SelectItem value="Em andamento">Em andamento</SelectItem>
+                  <SelectItem value="Em atraso">Em atraso</SelectItem>
+                  <SelectItem value="Descumprido">Descumprido</SelectItem>
+                  <SelectItem value="Dia de pagamento">Dia de pagamento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button type="button" onClick={handleBulkUpdate} disabled={loading} className="w-full">
+              {loading ? 'Salvando...' : 'Atualizar selecionados'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir casos selecionados</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir os casos selecionados? Esta ação excluirá permanentemente
+              os casos, acordos, parcelas e alvarás vinculados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} className="bg-rose-600 hover:bg-rose-700">
+              Excluir Tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>          
     </div>
   );
 }
