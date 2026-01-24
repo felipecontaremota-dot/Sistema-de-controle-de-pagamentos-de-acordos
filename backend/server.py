@@ -102,6 +102,7 @@ class AgreementCreate(BaseModel):
     installments_count: int
     installment_value: float
     first_due_date: str
+    observation: Optional[str] = None    
     has_entry: Optional[bool] = False
     entry_value: Optional[float] = 0.0
     entry_via_alvara: Optional[bool] = False
@@ -115,6 +116,7 @@ class Agreement(BaseModel):
     installments_count: int
     installment_value: float
     first_due_date: str
+    observation: Optional[str] = None
     has_entry: Optional[bool] = False
     entry_value: Optional[float] = 0.0
     entry_via_alvara: Optional[bool] = False
@@ -126,6 +128,7 @@ class AgreementUpdate(BaseModel):
     installments_count: Optional[int] = None
     installment_value: Optional[float] = None
     first_due_date: Optional[str] = None
+    observation: Optional[str] = None    
     has_entry: Optional[bool] = None
     entry_value: Optional[float] = None
     entry_via_alvara: Optional[bool] = None
