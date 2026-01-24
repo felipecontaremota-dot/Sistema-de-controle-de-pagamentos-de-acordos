@@ -138,6 +138,12 @@ export default function AlvarasPendentes({ token, setToken }) {
 
     return result;
   }, [alvaras, searchDebtor, searchProcess, beneficiaryFilter, orderBy]);
+
+  const totalPendente = useMemo(() => {
+    return filteredAlvaras.reduce((total, alvara) => {
+      return total + (Number(alvara.valor) || 0);
+    }, 0);
+  }, [filteredAlvaras]);
   
   return (
     <div className="min-h-screen bg-slate-50">
@@ -161,7 +167,7 @@ export default function AlvarasPendentes({ token, setToken }) {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-6">
           <h3 className="font-semibold text-slate-900 mb-4">Filtros</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -222,8 +228,11 @@ export default function AlvarasPendentes({ token, setToken }) {
               <h3 className="text-lg font-semibold text-slate-900">Pendências de Alvarás</h3>
               <p className="text-sm text-slate-600">Gerencie e dê baixa nos alvarás aguardando pagamento</p>
             </div>
-            <div className="text-sm text-slate-600" data-testid="alvaras-count">
-              {alvaras.length} pendente(s)
+            <div className="text-right space-y-1" data-testid="alvaras-count">
+              <div className="text-sm text-slate-600">{filteredAlvaras.length} pendente(s)</div>
+              <div className="text-base font-semibold text-emerald-700">
+                Total pendente: {formatCurrency(totalPendente)}
+              </div>
             </div>
           </div>
 
