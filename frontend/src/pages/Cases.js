@@ -334,8 +334,9 @@ export default function Cases({ token, setToken }) {
     const hasAgreement = case_.status_acordo && case_.status_acordo !== 'Sem acordo';
     const allInstallmentsPaid = case_.percent_recovered >= 100;
     const hasPendingAlvara =
-      Array.isArray(case_.alvaras) &&
-      case_.alvaras.some((a) => a.status === 'Aguardando alvará');
+      case_.has_pending_alvara === true ||
+      Number(case_.pending_alvara_count) > 0 ||
+      case_.status_processo === 'Aguardando alvará';
 
     if (hasAgreement) {
       if (allInstallmentsPaid) {
