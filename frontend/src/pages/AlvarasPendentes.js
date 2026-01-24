@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { ArrowLeft, FileText, CheckCircle2 } from 'lucide-react';
 import { formatCurrency, formatDateBR } from '../utils/formatters';
@@ -28,6 +29,10 @@ export default function AlvarasPendentes({ token, setToken }) {
     beneficiario_codigo: '',
     observacoes: '',
   });
+  const [searchDebtor, setSearchDebtor] = useState('');
+  const [searchProcess, setSearchProcess] = useState('');
+  const [beneficiaryFilter, setBeneficiaryFilter] = useState('all');
+  const [orderBy, setOrderBy] = useState('recent');
   const navigate = useNavigate();
 
   const handleUnauthorized = () => {
@@ -98,6 +103,42 @@ export default function AlvarasPendentes({ token, setToken }) {
     }
   };
 
+    const filteredAlvaras = useMemo(() => {
+    let result = [...alvaras];
+
+    if (searchDebtor) {
+      result = result.filter((alvara) =>
+        alvara.devedor?.toLowerCase().includes(searchDebtor.toLowerCase())
+      );
+    }
+
+    if (searchProcess) {
+      result = result.filter((alvara) =>
+        (alvara.numero_processo || '').includes(searchProcess)
+      );
+    }
+
+    if (beneficiaryFilter !== 'all') {
+      result = result.filter((alvara) => alvara.beneficiario === beneficiaryFilter);
+    }
+
+    switch (orderBy) {
+      case 'alpha':
+        result.sort((a, b) => (a.devedor || '').localeCompare(b.devedor || '', 'pt-BR'));
+        break;
+      case 'min':
+        result.sort((a, b) => (a.valor || 0) - (b.valor || 0));
+        break;
+      case 'max':
+        result.sort((a, b) => (b.valor || 0) - (a.valor || 0));
+        break;
+      default:
+        result.sort((a, b) => new Date(b.data) - new Date(a.data));
+    }
+
+    return result;
+  }, [alvaras, searchDebtor, searchProcess, beneficiaryFilter, orderBy]);
+  
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-white border-b border-slate-200">
@@ -121,6 +162,60 @@ export default function AlvarasPendentes({ token, setToken }) {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-6">
+          <h3 className="font-semibold text-slate-900 mb-4">Filtros</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <Label htmlFor="search-debtor">Buscar por devedor</Label>
+              <Input
+                id="search-debtor"
+                value={searchDebtor}
+                onChange={(event) => setSearchDebtor(event.target.value)}
+                placeholder="Digite o nome do devedor"
+                className="mt-1"
+                data-testid="search-debtor-input"
+              />
+            </div>
+            <div>
+              <Label htmlFor="search-process">Buscar por nº do processo</Label>
+              <Input
+                id="search-process"
+                value={searchProcess}
+                onChange={(event) => setSearchProcess(event.target.value)}
+                placeholder="Digite o número do processo"
+                className="mt-1"
+                data-testid="search-process-input"
+              />
+            </div>
+            <div>
+              <Label htmlFor="beneficiary-filter">Beneficiário</Label>
+              <Select value={beneficiaryFilter} onValueChange={setBeneficiaryFilter}>
+                <SelectTrigger className="mt-1" data-testid="beneficiary-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="31">31</SelectItem>
+                  <SelectItem value="14">14</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="order-by">Ordenar por</Label>
+              <Select value={orderBy} onValueChange={setOrderBy}>
+                <SelectTrigger className="mt-1" data-testid="order-by">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Mais recentes</SelectItem>
+                  <SelectItem value="alpha">Ordem alfabética (devedor)</SelectItem>
+                  <SelectItem value="min">Menor valor</SelectItem>
+                  <SelectItem value="max">Maior valor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>                             
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-200 flex justify-between items-center">
             <div>
@@ -160,7 +255,7 @@ export default function AlvarasPendentes({ token, setToken }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {alvaras.map((alvara) => (
+                {filteredAlvaras.map((alvara) => (
                   <tr key={alvara.alvara_id} className="table-row hover:bg-slate-50">
                     <td className="px-6 py-4 font-mono text-slate-900">
                       {formatDateBR(alvara.data)}
