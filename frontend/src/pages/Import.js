@@ -33,10 +33,10 @@ const fieldSections = [
     key: 'case',
     title: 'Caso Judicial',
     fields: [
-      { key: 'debtor_name', label: 'Nome do devedor', required: true },
+      { key: 'debtor_name', label: 'Nome do devedor' },
       { key: 'internal_id', label: 'ID interno' },
-      { key: 'value_causa', label: 'Valor da causa', required: true },
-      { key: 'polo_ativo_text', label: 'Polo ativo (texto)', required: true },
+      { key: 'value_causa', label: 'Valor da causa' },
+      { key: 'polo_ativo_text', label: 'Polo ativo (texto)' },
       { key: 'notes', label: 'Observações' },
       { key: 'numero_processo', label: 'Número do processo' },
       { key: 'data_protocolo', label: 'Data de protocolo' },
@@ -50,10 +50,10 @@ const fieldSections = [
     key: 'agreement',
     title: 'Acordo',
     fields: [
-      { key: 'total_value', label: 'Valor total', required: true },
-      { key: 'installments_count', label: 'Quantidade de parcelas', required: true },
-      { key: 'installment_value', label: 'Valor da parcela', required: true },
-      { key: 'first_due_date', label: 'Primeiro vencimento', required: true },
+      { key: 'total_value', label: 'Valor total' },
+      { key: 'installments_count', label: 'Quantidade de parcelas' },
+      { key: 'installment_value', label: 'Valor da parcela' },
+      { key: 'first_due_date', label: 'Primeiro vencimento' },
       { key: 'has_entry', label: 'Possui entrada (sim/não)' },
       { key: 'entry_value', label: 'Valor da entrada' },
       { key: 'entry_via_alvara', label: 'Entrada via alvará (sim/não)' },
@@ -64,8 +64,8 @@ const fieldSections = [
     key: 'installment',
     title: 'Parcelas',
     fields: [
-      { key: 'number', label: 'Número da parcela', required: true },
-      { key: 'due_date', label: 'Data de vencimento', required: true },
+      { key: 'number', label: 'Número da parcela' },
+      { key: 'due_date', label: 'Data de vencimento' },
       { key: 'paid_date', label: 'Data de pagamento' },
       { key: 'paid_value', label: 'Valor pago' },
       { key: 'is_entry', label: 'É entrada (sim/não)' },
@@ -76,10 +76,10 @@ const fieldSections = [
     title: 'Alvarás Judiciais',
     fields: [
       { key: 'data_alvara', label: 'Data do alvará' },
-      { key: 'valor_alvara', label: 'Valor do alvará', required: true },
-      { key: 'beneficiario_codigo', label: 'Beneficiário (31 ou 14)', required: true },
+      { key: 'valor_alvara', label: 'Valor do alvará' },
+      { key: 'beneficiario_codigo', label: 'Beneficiário (31 ou 14)' },
       { key: 'observacoes', label: 'Observações' },
-      { key: 'status_alvara', label: 'Status do alvará', required: true },
+      { key: 'status_alvara', label: 'Status do alvará' },
     ],
   },
 ];
@@ -351,7 +351,6 @@ export default function Import({ setToken }) {
                           <div key={field.key} className="space-y-2">
                             <label className="text-sm font-medium text-slate-700">
                               {field.label}
-                              {field.required && <span className="text-rose-500"> *</span>}
                             </label>
                             <Select
                               value={mapping[section.key][field.key] || ''}
