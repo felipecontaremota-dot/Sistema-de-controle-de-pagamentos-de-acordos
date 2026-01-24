@@ -10,6 +10,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { Textarea } from '../components/ui/textarea';
 import { ArrowLeft, Plus, Scale, FileText, Calendar, DollarSign, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { formatDateBR, formatCurrency } from '../utils/formatters';
 
@@ -49,6 +50,7 @@ export default function CaseDetail({ token, setToken }) {
     entry_value: '',
     entry_via_alvara: false,
     entry_date: '',
+    notes: '',    
   });
 
   const [paymentForm, setPaymentForm] = useState({
@@ -343,48 +345,108 @@ export default function CaseDetail({ token, setToken }) {
     }
   };
 
-const handleUpdateAgreement = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-
-  try {
-    await axios.put(
-      `${API}/agreements/${data.agreement.id}`,
-      {
-        total_value: parseFloat(agreementForm.total_value),
-        installments_count: parseInt(agreementForm.installments_count, 10),
-        installment_value: parseFloat(agreementForm.installment_value),
-        first_due_date: agreementForm.first_due_date,
-        has_entry: agreementForm.has_entry,
-        entry_value: agreementForm.has_entry
-          ? parseFloat(agreementForm.entry_value)
-          : null,
-        entry_via_alvara: agreementForm.entry_via_alvara,
-        entry_date: agreementForm.has_entry
-          ? agreementForm.entry_date
-          : null,
-      },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-
-    toast.success("Acordo atualizado com sucesso!");
-    setEditAgreementDialogOpen(false);
-    fetchCaseDetail();
-  } catch (error) {
-    if (error.response?.status === 401) {
-      handleUnauthorized();
-    } else {
-      toast.error(
-        error.response?.data?.detail || "Erro ao atualizar acordo"
-      );
+  const handleUpdateAgreement = async (e) => {
+    e.preventDefault();
+    if (!data?.agreement) {
+      toast.error('Não há acordo para atualizar.');
+      return;
     }
-  } finally {
-    setLoading(false);
-  }
-};
-  
+
+    const hasPaidInstallments = data.installments?.some((inst) => inst.paid_date);
+    const entryInstallment = data.installments?.find((inst) => inst.is_entry);
+    const isEntryPaid = Boolean(entryInstallment?.paid_date);
+
+    const normalizeNumber = (value) => {
+      if (value === '' || value === null || value === undefined) {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const normalizeInteger = (value) => {
+      if (value === '' || value === null || value === undefined) {
+        return null;
+      }
+      const parsed = parseInt(value, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const payload = {};
+    const original = data.agreement;
+
+    const totalValue = normalizeNumber(agreementForm.total_value);
+    if (totalValue !== null && totalValue !== original.total_value) {
+      payload.total_value = totalValue;
+    }
+
+    const installmentsCount = normalizeInteger(agreementForm.installments_count);
+    if (installmentsCount !== null && installmentsCount !== original.installments_count) {
+      payload.installments_count = installmentsCount;
+    }
+
+    const installmentValue = normalizeNumber(agreementForm.installment_value);
+    if (installmentValue !== null && installmentValue !== original.installment_value) {
+      payload.installment_value = installmentValue;
+    }
+
+    if (!hasPaidInstallments && agreementForm.first_due_date) {
+      if (agreementForm.first_due_date !== original.first_due_date) {
+        payload.first_due_date = agreementForm.first_due_date;
+      }
+    }
+
+    if (agreementForm.has_entry !== original.has_entry) {
+      payload.has_entry = agreementForm.has_entry;
+    }
+
+    if (agreementForm.has_entry) {
+      const entryValue = normalizeNumber(agreementForm.entry_value);
+      if (entryValue !== null && entryValue !== (original.entry_value ?? 0)) {
+        payload.entry_value = entryValue;
+      }
+
+      if (agreementForm.entry_via_alvara !== original.entry_via_alvara) {
+        payload.entry_via_alvara = agreementForm.entry_via_alvara;
+      }
+
+      if (!isEntryPaid && agreementForm.entry_date) {
+        if (agreementForm.entry_date !== original.entry_date) {
+          payload.entry_date = agreementForm.entry_date;
+        }
+      }
+    }
+
+    const notesValue = agreementForm.notes ?? '';
+    if (notesValue !== (original.notes ?? '')) {
+      payload.notes = notesValue;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      toast.info('Nenhuma alteração para salvar.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await axios.put(`${API}/agreements/${data.agreement.id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      toast.success('Acordo atualizado com sucesso!');
+      setEditAgreementDialogOpen(false);
+      fetchCaseDetail();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        toast.error(error.response?.data?.detail || 'Erro ao atualizar acordo');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleToggleAlvaraStatus = async (alvara) => {
     const newStatus = alvara.status_alvara === 'Aguardando alvará' ? 'Alvará pago' : 'Aguardando alvará';
@@ -433,6 +495,9 @@ const handleUpdateAgreement = async (e) => {
   }
 
   const totalAlvaras = (data.alvaras || []).reduce((sum, alv) => sum + (alv?.valor_alvara || 0), 0);
+  const hasPaidInstallments = data.installments?.some((inst) => inst.paid_date);
+  const entryInstallment = data.installments?.find((inst) => inst.is_entry);
+  const isEntryPaid = Boolean(entryInstallment?.paid_date);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -550,6 +615,7 @@ const handleUpdateAgreement = async (e) => {
                             entry_value: data.agreement.entry_value || '',
                             entry_via_alvara: data.agreement.entry_via_alvara,
                             entry_date: data.agreement.entry_date || '',
+                            notes: data.agreement.notes || '',                            
                           });
                         setEditAgreementDialogOpen(true);
                     }}
@@ -625,23 +691,23 @@ const handleUpdateAgreement = async (e) => {
     <form onSubmit={handleUpdateAgreement} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="total_value">Valor total do acordo *</Label>
+          <Label htmlFor="edit_total_value">Valor total do acordo</Label>
           <Input
-            id="total_value"
+            id="edit_total_value"
             type="number"
             step="0.01"
             value={agreementForm.total_value}
             onChange={(e) =>
               setAgreementForm({ ...agreementForm, total_value: e.target.value })
             }
-            required
+
           />
         </div>
 
         <div>
-          <Label htmlFor="installments_count">Número de parcelas *</Label>
+          <Label htmlFor="edit_installments_count">Número de parcelas</Label>
           <Input
-            id="installments_count"
+            id="edit_installments_count"
             type="number"
             value={agreementForm.installments_count}
             onChange={(e) =>
@@ -650,18 +716,135 @@ const handleUpdateAgreement = async (e) => {
                 installments_count: e.target.value,
               })
             }
-            required
+
           />
         </div>
       </div>
 
-      {/* Repita aqui TODOS os outros inputs do Criar Acordo */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="edit_installment_value">Valor da parcela</Label>
+          <Input
+            id="edit_installment_value"
+            type="number"
+            step="0.01"
+            value={agreementForm.installment_value}
+            onChange={(e) =>
+              setAgreementForm({
+                ...agreementForm,
+                installment_value: e.target.value,
+              })
+            }
+          />
+        </div>
 
-      <Button
-        type="submit"
-        className="w-full"
-        disabled={loading}
-      >
+        {!hasPaidInstallments && (
+          <div>
+            <Label htmlFor="edit_first_due_date">Data da 1ª parcela</Label>
+            <Input
+              id="edit_first_due_date"
+              type="date"
+              value={agreementForm.first_due_date}
+              onChange={(e) =>
+                setAgreementForm({
+                  ...agreementForm,
+                  first_due_date: e.target.value,
+                })
+              }
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="border-t pt-4 space-y-3">
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="edit_has_entry"
+            checked={agreementForm.has_entry}
+            onChange={(e) =>
+              setAgreementForm({
+                ...agreementForm,
+                has_entry: e.target.checked,
+              })
+            }
+          />
+          <Label htmlFor="edit_has_entry">Há entrada</Label>
+        </div>
+
+        {agreementForm.has_entry && (
+          <div className="space-y-4 bg-slate-50 p-4 rounded-lg">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit_entry_value">Valor da entrada</Label>
+                <Input
+                  id="edit_entry_value"
+                  type="number"
+                  step="0.01"
+                  value={agreementForm.entry_value}
+                  onChange={(e) =>
+                    setAgreementForm({
+                      ...agreementForm,
+                      entry_value: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              {!isEntryPaid && (
+                <div>
+                  <Label htmlFor="edit_entry_date">Data da entrada</Label>
+                  <Input
+                    id="edit_entry_date"
+                    type="date"
+                    value={agreementForm.entry_date}
+                    onChange={(e) =>
+                      setAgreementForm({
+                        ...agreementForm,
+                        entry_date: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="edit_entry_via_alvara"
+                checked={agreementForm.entry_via_alvara}
+                onChange={(e) =>
+                  setAgreementForm({
+                    ...agreementForm,
+                    entry_via_alvara: e.target.checked,
+                  })
+                }
+              />
+              <Label htmlFor="edit_entry_via_alvara">Entrada via alvará judicial</Label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <Label htmlFor="edit_notes">Observações</Label>
+        <Textarea
+          id="edit_notes"
+          value={agreementForm.notes}
+          onChange={(e) =>
+            setAgreementForm({
+              ...agreementForm,
+              notes: e.target.value,
+            })
+          }
+          rows={3}
+          placeholder="Observações adicionais sobre o acordo"
+        />
+      </div>
+
+      <Button type="submit" className="w-full" disabled={loading}>
+
         {loading ? 'Salvando...' : 'Salvar Alterações'}
       </Button>
     </form>
