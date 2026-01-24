@@ -64,6 +64,8 @@ class CaseBase(BaseModel):
     status_processo: Optional[str] = ""
     data_matricula: Optional[str] = ""
     cpf: Optional[str] = ""
+    whatsapp: Optional[str] = ""
+    email: Optional[EmailStr] = None    
     curso: Optional[str] = ""
 
 
@@ -82,6 +84,8 @@ class CaseUpdate(BaseModel):
     status_processo: Optional[str] = None
     data_matricula: Optional[str] = None
     cpf: Optional[str] = None
+    whatsapp: Optional[str] = None
+    email: Optional[EmailStr] = None    
     curso: Optional[str] = None
 
 
