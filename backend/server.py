@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -7,12 +7,16 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Any
 import uuid
 from datetime import datetime, date, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+import pandas as pd
+import tempfile
+import numpy as np
+import json
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -23,6 +27,7 @@ db = client[os.environ["DB_NAME"]]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+import_router = APIRouter(prefix="/import")
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,6 +44,16 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
 logger = logging.getLogger("uvicorn")
 
+IMPORT_SESSIONS: dict[str, dict[str, Any]] = {}
+MAX_IMPORT_FILE_SIZE_MB = 10
+IMPORT_ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
+
+IMPORT_REQUIRED_FIELDS = {
+    "case": ["debtor_name", "value_causa", "polo_ativo_text"],
+    "agreement": ["total_value", "installments_count", "installment_value", "first_due_date"],
+    "installment": ["number", "due_date"],
+    "alvara": ["valor_alvara", "beneficiario_codigo", "status_alvara"],
+}
 
 class User(BaseModel):
     id: str
@@ -160,6 +175,21 @@ class AlvaraUpdate(BaseModel):
     status_alvara: Optional[str] = None
 
 
+class ImportPreviewRequest(BaseModel):
+    session_id: str
+    sample_size: int = 10
+
+
+class ImportValidateRequest(BaseModel):
+    session_id: str
+    mapping: dict
+
+
+class ImportCommitRequest(BaseModel):
+    session_id: str
+    mapping: dict
+
+
 security = HTTPBearer()
 
 
@@ -278,6 +308,112 @@ async def update_case_materialized_fields(case_id: str) -> None:
             }
         }
     )
+
+
+def normalize_import_value(value: Any) -> Any:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return ""
+    if pd.isna(value):
+        return ""
+    if isinstance(value, (pd.Timestamp, datetime)):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def parse_date_value(value: Any) -> Optional[str]:
+    if value in ("", None):
+        return None
+    if isinstance(value, (datetime, date, pd.Timestamp)):
+        return value.strftime("%Y-%m-%d")
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed.strftime("%Y-%m-%d")
+
+
+def parse_float_value(value: Any) -> Optional[float]:
+    if value in ("", None):
+        return None
+    if isinstance(value, (int, float, np.number)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip().replace(" ", "")
+        if cleaned.count(",") == 1 and cleaned.count(".") >= 1:
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        elif cleaned.count(",") == 1 and cleaned.count(".") == 0:
+            cleaned = cleaned.replace(",", ".")
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def parse_int_value(value: Any) -> Optional[int]:
+    float_value = parse_float_value(value)
+    if float_value is None:
+        return None
+    return int(float_value)
+
+
+def parse_bool_value(value: Any) -> Optional[bool]:
+    if value in ("", None):
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"sim", "s", "yes", "y", "true", "1"}:
+            return True
+        if normalized in {"nao", "não", "n", "no", "false", "0"}:
+            return False
+    return None
+
+
+def load_import_dataframe(session: dict[str, Any]) -> pd.DataFrame:
+    file_path = session["path"]
+    extension = session["extension"]
+    if extension == ".csv":
+        df = pd.read_csv(file_path)
+    else:
+        df = pd.read_excel(file_path)
+    df.columns = [str(col) for col in df.columns]
+    return df
+
+
+def build_mapping_errors(mapping: dict) -> list[dict[str, Any]]:
+    errors = []
+    for section, required_fields in IMPORT_REQUIRED_FIELDS.items():
+        for field in required_fields:
+            column = mapping.get(section, {}).get(field) if isinstance(mapping.get(section), dict) else None
+            if not column:
+                errors.append({"row": None, "message": f"Campo obrigatório não mapeado: {section}.{field}"})
+    return errors
+
+
+def get_import_session(session_id: str, user_id: str) -> dict[str, Any]:
+    session = IMPORT_SESSIONS.get(session_id)
+    if not session or session.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Sessão de importação não encontrada")
+    return session
+
+
+def build_row_data(df_row: pd.Series, columns: list[str]) -> dict[str, Any]:
+    return {column: normalize_import_value(df_row[column]) for column in columns}
+
+
+def build_row_payload(row: dict[str, Any], mapping_section: dict[str, str]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for field, column in mapping_section.items():
+        if column:
+            payload[field] = row.get(column, "")
+    return payload
 
 
 @app.on_event("startup")
@@ -981,4 +1117,361 @@ async def get_receipts_pdf_optimized(
     )
 
 
+@import_router.post("/upload")
+async def upload_import_file(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    filename = file.filename or ""
+    extension = Path(filename).suffix.lower()
+    if extension not in IMPORT_ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+
+    contents = await file.read()
+    await file.close()
+
+    if len(contents) > MAX_IMPORT_FILE_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Arquivo excede o tamanho permitido")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as temp_file:
+        temp_file.write(contents)
+        temp_path = temp_file.name
+
+    session_id = str(uuid.uuid4())
+    IMPORT_SESSIONS[session_id] = {
+        "path": temp_path,
+        "filename": filename,
+        "extension": extension,
+        "user_id": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    return {"session_id": session_id}
+
+
+@import_router.post("/preview")
+async def preview_import_file(
+    payload: ImportPreviewRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    session = get_import_session(payload.session_id, current_user["id"])
+    df = load_import_dataframe(session)
+    columns = df.columns.tolist()
+    total_rows = int(len(df.index))
+    sample_df = df.head(max(payload.sample_size, 1))
+    preview = [build_row_data(row, columns) for _, row in sample_df.iterrows()]
+
+    return {
+        "columns": columns,
+        "preview": preview,
+        "total_rows": total_rows
+    }
+
+
+@import_router.post("/validate")
+async def validate_import_file(
+    payload: ImportValidateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    session = get_import_session(payload.session_id, current_user["id"])
+    df = load_import_dataframe(session)
+    columns = df.columns.tolist()
+    mapping = payload.mapping or {}
+
+    errors = build_mapping_errors(mapping)
+    warnings: list[dict[str, Any]] = []
+    invalid_rows = 0
+
+    for index, row in df.iterrows():
+        row_data = build_row_data(row, columns)
+        row_errors = []
+        for section, required_fields in IMPORT_REQUIRED_FIELDS.items():
+            section_mapping = mapping.get(section, {})
+            if not isinstance(section_mapping, dict):
+                continue
+            for field in required_fields:
+                column = section_mapping.get(field)
+                if column:
+                    value = row_data.get(column)
+                    if value in ("", None):
+                        row_errors.append({"row": index + 1, "message": f"Campo obrigatório vazio: {section}.{field}"})
+
+        if row_errors:
+            invalid_rows += 1
+            errors.extend(row_errors)
+            continue
+
+        case_payload = build_row_payload(row_data, mapping.get("case", {}))
+        agreement_payload = build_row_payload(row_data, mapping.get("agreement", {}))
+        installment_payload = build_row_payload(row_data, mapping.get("installment", {}))
+        alvara_payload = build_row_payload(row_data, mapping.get("alvara", {}))
+
+        if parse_float_value(case_payload.get("value_causa")) is None:
+            invalid_rows += 1
+            errors.append({"row": index + 1, "message": "Valor da causa inválido"})
+            continue
+        if parse_float_value(agreement_payload.get("total_value")) is None:
+            invalid_rows += 1
+            errors.append({"row": index + 1, "message": "Valor total do acordo inválido"})
+            continue
+        if parse_int_value(agreement_payload.get("installments_count")) is None:
+            invalid_rows += 1
+            errors.append({"row": index + 1, "message": "Quantidade de parcelas inválida"})
+            continue
+        if parse_float_value(agreement_payload.get("installment_value")) is None:
+            invalid_rows += 1
+            errors.append({"row": index + 1, "message": "Valor da parcela inválido"})
+            continue
+        if parse_date_value(agreement_payload.get("first_due_date")) is None:
+            invalid_rows += 1
+            errors.append({"row": index + 1, "message": "Primeiro vencimento inválido"})
+            continue
+        if parse_int_value(installment_payload.get("number")) is None:
+            invalid_rows += 1
+            errors.append({"row": index + 1, "message": "Número da parcela inválido"})
+            continue
+        if parse_date_value(installment_payload.get("due_date")) is None:
+            invalid_rows += 1
+            errors.append({"row": index + 1, "message": "Data de vencimento inválida"})
+            continue
+        if parse_float_value(alvara_payload.get("valor_alvara")) is None:
+            invalid_rows += 1
+            errors.append({"row": index + 1, "message": "Valor do alvará inválido"})
+            continue
+
+    total_rows = int(len(df.index))
+    valid_rows = max(0, total_rows - invalid_rows)
+
+    return {
+        "summary": {
+            "total_rows": total_rows,
+            "valid_rows": valid_rows,
+            "invalid_rows": invalid_rows
+        },
+        "errors": errors,
+        "warnings": warnings
+    }
+
+
+@import_router.post("/commit")
+async def commit_import_file(
+    payload: ImportCommitRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    session = get_import_session(payload.session_id, current_user["id"])
+    df = load_import_dataframe(session)
+    columns = df.columns.tolist()
+    mapping = payload.mapping or {}
+
+    mapping_errors = build_mapping_errors(mapping)
+    if mapping_errors:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Mapeamento inválido", "errors": mapping_errors}
+        )
+
+    case_cache: dict[str, dict[str, Any]] = {}
+    agreement_cache: dict[str, dict[str, Any]] = {}
+    totals = {"cases": 0, "agreements": 0, "installments": 0, "alvaras": 0}
+    results: list[dict[str, Any]] = []
+    updated_case_ids: set[str] = set()
+
+    for index, row in df.iterrows():
+        row_data = build_row_data(row, columns)
+        row_number = index + 1
+
+        row_errors = []
+        for section, required_fields in IMPORT_REQUIRED_FIELDS.items():
+            section_mapping = mapping.get(section, {})
+            if not isinstance(section_mapping, dict):
+                continue
+            for field in required_fields:
+                column = section_mapping.get(field)
+                if column:
+                    value = row_data.get(column)
+                    if value in ("", None):
+                        row_errors.append(f"Campo obrigatório vazio: {section}.{field}")
+
+        if row_errors:
+            results.append({
+                "row": row_number,
+                "status": "Erro",
+                "message": "; ".join(row_errors)
+            })
+            continue
+
+        case_payload = build_row_payload(row_data, mapping.get("case", {}))
+        agreement_payload = build_row_payload(row_data, mapping.get("agreement", {}))
+        installment_payload = build_row_payload(row_data, mapping.get("installment", {}))
+        alvara_payload = build_row_payload(row_data, mapping.get("alvara", {}))
+
+        case_value_causa = parse_float_value(case_payload.get("value_causa"))
+        agreement_total_value = parse_float_value(agreement_payload.get("total_value"))
+        agreement_installments_count = parse_int_value(agreement_payload.get("installments_count"))
+        agreement_installment_value = parse_float_value(agreement_payload.get("installment_value"))
+        agreement_first_due = parse_date_value(agreement_payload.get("first_due_date"))
+        installment_number = parse_int_value(installment_payload.get("number"))
+        installment_due_date = parse_date_value(installment_payload.get("due_date"))
+        alvara_value = parse_float_value(alvara_payload.get("valor_alvara"))
+
+        if None in (
+            case_value_causa,
+            agreement_total_value,
+            agreement_installments_count,
+            agreement_installment_value,
+            agreement_first_due,
+            installment_number,
+            installment_due_date,
+            alvara_value
+        ):
+            results.append({
+                "row": row_number,
+                "status": "Erro",
+                "message": "Dados inválidos ou incompletos"
+            })
+            continue
+
+        case_internal_id = str(case_payload.get("internal_id") or "").strip()
+        case_key = case_internal_id or str(case_payload.get("debtor_name") or "").strip()
+        case_cache_key = f"{current_user['id']}::{case_key}"
+
+        case_record = case_cache.get(case_cache_key)
+        if not case_record:
+            case_id = str(uuid.uuid4())
+            case_record = {
+                "id": case_id,
+                "user_id": current_user["id"],
+                "debtor_name": str(case_payload.get("debtor_name") or ""),
+                "internal_id": case_internal_id or str(uuid.uuid4()),
+                "value_causa": case_value_causa,
+                "polo_ativo_text": str(case_payload.get("polo_ativo_text") or ""),
+                "notes": str(case_payload.get("notes") or ""),
+                "numero_processo": str(case_payload.get("numero_processo") or ""),
+                "data_protocolo": str(case_payload.get("data_protocolo") or ""),
+                "status_processo": str(case_payload.get("status_processo") or ""),
+                "data_matricula": str(case_payload.get("data_matricula") or ""),
+                "cpf": str(case_payload.get("cpf") or ""),
+                "whatsapp": str(case_payload.get("whatsapp") or ""),
+                "email": case_payload.get("email"),
+                "curso": str(case_payload.get("curso") or ""),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "polo_ativo_codigo": extract_beneficiary_code(case_payload.get("polo_ativo_text")),
+                "has_agreement": False,
+                "status_acordo": "",
+                "total_received": 0.0,
+                "percent_recovered": 0.0
+            }
+            await db.cases.insert_one(case_record)
+            case_cache[case_cache_key] = case_record
+            totals["cases"] += 1
+
+        agreement_key = json.dumps(
+            {
+                "case_id": case_record["id"],
+                "total_value": agreement_total_value,
+                "installments_count": agreement_installments_count,
+                "installment_value": agreement_installment_value,
+                "first_due_date": agreement_first_due,
+                "has_entry": parse_bool_value(agreement_payload.get("has_entry")),
+                "entry_value": parse_float_value(agreement_payload.get("entry_value")) or 0.0,
+                "entry_via_alvara": parse_bool_value(agreement_payload.get("entry_via_alvara")) or False,
+                "entry_date": parse_date_value(agreement_payload.get("entry_date")),
+            },
+            sort_keys=True
+        )
+
+        agreement_record = agreement_cache.get(agreement_key)
+        if not agreement_record:
+            agreement_record = {
+                "id": str(uuid.uuid4()),
+                "case_id": case_record["id"],
+                "total_value": agreement_total_value,
+                "installments_count": agreement_installments_count,
+                "installment_value": agreement_installment_value,
+                "first_due_date": agreement_first_due,
+                "observation": agreement_payload.get("observation"),
+                "has_entry": parse_bool_value(agreement_payload.get("has_entry")) or False,
+                "entry_value": parse_float_value(agreement_payload.get("entry_value")) or 0.0,
+                "entry_via_alvara": parse_bool_value(agreement_payload.get("entry_via_alvara")) or False,
+                "entry_date": parse_date_value(agreement_payload.get("entry_date")),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.agreements.insert_one(agreement_record)
+            agreement_cache[agreement_key] = agreement_record
+            totals["agreements"] += 1
+
+        installment_record = {
+            "id": str(uuid.uuid4()),
+            "agreement_id": agreement_record["id"],
+            "is_entry": parse_bool_value(installment_payload.get("is_entry")) or False,
+            "number": installment_number,
+            "due_date": installment_due_date,
+            "paid_date": parse_date_value(installment_payload.get("paid_date")),
+            "paid_value": parse_float_value(installment_payload.get("paid_value")),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.installments.insert_one(installment_record)
+        totals["installments"] += 1
+
+        alvara_record = {
+            "id": str(uuid.uuid4()),
+            "case_id": case_record["id"],
+            "data_alvara": parse_date_value(alvara_payload.get("data_alvara")) or "",
+            "valor_alvara": alvara_value,
+            "beneficiario_codigo": str(alvara_payload.get("beneficiario_codigo") or ""),
+            "observacoes": alvara_payload.get("observacoes"),
+            "status_alvara": str(alvara_payload.get("status_alvara") or ""),
+            "user_id": current_user["id"],
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "status": "aguardando",
+        }
+        await db.alvaras.insert_one(alvara_record)
+        totals["alvaras"] += 1
+
+        updated_case_ids.add(case_record["id"])
+        results.append({
+            "row": row_number,
+            "status": "Sucesso",
+            "message": "Linha importada com sucesso"
+        })
+
+    for case_id in updated_case_ids:
+        try:
+            await update_case_materialized_fields(case_id)
+        except Exception:
+            pass
+
+    history_entry = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "filename": session.get("filename", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "totals": totals,
+    }
+    await db.import_history.insert_one(history_entry)
+
+    try:
+        os.remove(session["path"])
+    except OSError:
+        pass
+    IMPORT_SESSIONS.pop(payload.session_id, None)
+
+    return {
+        "message": "Importação concluída",
+        "totals": totals,
+        "results": results
+    }
+
+
+@import_router.get("/history")
+async def get_import_history(current_user: dict = Depends(get_current_user)):
+    history = await db.import_history.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "user_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return history
+
+
+api_router.include_router(import_router)
 app.include_router(api_router)
