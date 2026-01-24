@@ -133,7 +133,6 @@ class AgreementUpdate(BaseModel):
     entry_value: Optional[float] = None
     entry_via_alvara: Optional[bool] = None
     entry_date: Optional[str] = None
-    notes: Optional[str] = None    
 
 class InstallmentUpdate(BaseModel):
     paid_date: Optional[str] = None
