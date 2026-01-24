@@ -93,6 +93,7 @@ class CaseUpdate(BaseModel):
     numero_processo: Optional[str] = None
     data_protocolo: Optional[str] = None
     status_processo: Optional[str] = None
+    status_acordo: Optional[str] = None    
     data_matricula: Optional[str] = None
     cpf: Optional[str] = None
     whatsapp: Optional[str] = None
@@ -184,6 +185,21 @@ class ImportValidateRequest(BaseModel):
 class ImportCommitRequest(BaseModel):
     session_id: str
     mapping: dict
+
+
+class CaseBulkUpdateFields(BaseModel):
+    status_processo: Optional[str] = None
+    polo_ativo_text: Optional[str] = None
+    status_acordo: Optional[str] = None
+
+
+class CaseBulkUpdateRequest(BaseModel):
+    case_ids: list[str]
+    updates: CaseBulkUpdateFields
+
+
+class CaseBulkDeleteRequest(BaseModel):
+    case_ids: list[str]
 
 
 security = HTTPBearer()
@@ -511,6 +527,70 @@ async def get_cases(
             "total_pages": total_pages
         }
     }
+
+@api_router.put("/cases/bulk-update")
+async def bulk_update_cases(payload: CaseBulkUpdateRequest, current_user: dict = Depends(get_current_user)):
+    if not payload.case_ids:
+        raise HTTPException(status_code=400, detail="Nenhum caso selecionado")
+
+    update_data = {k: v for k, v in payload.updates.model_dump().items() if v is not None and v != ""}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualização")
+
+    if "polo_ativo_text" in update_data:
+        update_data["polo_ativo_codigo"] = extract_beneficiary_code(update_data["polo_ativo_text"])
+
+    cases = await db.cases.find(
+        {"id": {"$in": payload.case_ids}, "user_id": current_user["id"]},
+        {"_id": 0, "id": 1},
+    ).to_list(1000)
+    case_ids = [case["id"] for case in cases]
+
+    if not case_ids:
+        return {"updated": 0}
+
+    await db.cases.update_many({"id": {"$in": case_ids}}, {"$set": update_data})
+
+    for case_id in case_ids:
+        await update_case_materialized_fields(case_id)
+
+    if "status_acordo" in update_data:
+        for case_id in case_ids:
+            agreement = await db.agreements.find_one({"case_id": case_id}, {"_id": 0, "id": 1})
+            if not agreement:
+                await db.cases.update_one({"id": case_id}, {"$set": {"status_acordo": update_data["status_acordo"]}})
+
+    return {"updated": len(case_ids)}
+
+
+@api_router.delete("/cases/bulk-delete")
+async def bulk_delete_cases(payload: CaseBulkDeleteRequest, current_user: dict = Depends(get_current_user)):
+    if not payload.case_ids:
+        raise HTTPException(status_code=400, detail="Nenhum caso selecionado")
+
+    cases = await db.cases.find(
+        {"id": {"$in": payload.case_ids}, "user_id": current_user["id"]},
+        {"_id": 0, "id": 1},
+    ).to_list(1000)
+    case_ids = [case["id"] for case in cases]
+
+    if not case_ids:
+        return {"deleted": 0}
+
+    agreements = await db.agreements.find(
+        {"case_id": {"$in": case_ids}},
+        {"_id": 0, "id": 1},
+    ).to_list(1000)
+    agreement_ids = [agreement["id"] for agreement in agreements]
+
+    if agreement_ids:
+        await db.installments.delete_many({"agreement_id": {"$in": agreement_ids}})
+        await db.agreements.delete_many({"id": {"$in": agreement_ids}})
+
+    await db.alvaras.delete_many({"case_id": {"$in": case_ids}})
+    delete_result = await db.cases.delete_many({"id": {"$in": case_ids}, "user_id": current_user["id"]})
+    return {"deleted": delete_result.deleted_count}
+
 
 @api_router.get("/cases/{case_id}")
 async def get_case(case_id: str, current_user: dict = Depends(get_current_user)):
