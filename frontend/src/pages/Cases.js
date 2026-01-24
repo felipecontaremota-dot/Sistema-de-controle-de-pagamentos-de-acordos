@@ -704,28 +704,28 @@ export default function Cases({ token, setToken }) {
             <table className="min-w-full w-full" data-testid="cases-table">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Devedor / Processo
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="px-6 py-3 min-w-[180px] text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Status Processo
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Valor da Causa
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Beneficiário
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Total Recebido
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     % Recuperado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Status Acordo
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Ações
                   </th>
                 </tr>
@@ -751,7 +751,7 @@ export default function Cases({ token, setToken }) {
                       </div>
                     </td>
 
-                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-6 py-4 min-w-[180px] text-center" onClick={(e) => e.stopPropagation()}>
                       {(() => {
                         const derivedStatus = getDerivedStatusProcesso(case_);
                         const canEditStatus = !case_.status_acordo;
