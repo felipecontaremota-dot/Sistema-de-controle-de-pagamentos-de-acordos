@@ -10,7 +10,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, Search, LogOut, Scale, Filter, DollarSign, Trash2, Upload } from 'lucide-react';
+import { Plus, Search, LogOut, Scale, Filter, DollarSign, Trash2, Upload, FileText } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
 const STATUS_PROCESSO_OPTIONS = [
@@ -295,6 +295,15 @@ export default function Cases({ token, setToken }) {
                 <DollarSign className="w-5 h-5 mr-2" />
                 Recebimentos
               </Button>
+              <Button
+                onClick={() => navigate('/alvaras-pendentes')}
+                variant="outline"
+                className="hover:bg-slate-100"
+                data-testid="alvaras-pendentes-button"
+              >
+                <FileText className="w-5 h-5 mr-2" />
+                Alvarás Pendentes
+              </Button>                  
               <Button
                 onClick={() => navigate('/import')}
                 variant="outline"
