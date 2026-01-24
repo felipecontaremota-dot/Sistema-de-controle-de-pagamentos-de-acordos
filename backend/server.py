@@ -541,7 +541,7 @@ async def update_agreement(
     update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not update_data:
         return {"message": "No changes to update"}
-    # Correção: o bloco de atualização precisa existir após o if; removemos redundância sem alterar a regra.
+
         await db.agreements.update_one({"id": agreement_id}, {"$set": update_data})
 
     effective_data = {**agreement, **update_data}
@@ -558,7 +558,6 @@ async def update_agreement(
             )
         should_recreate_installments = True
 
-    # Correção: este bloco tinha risco de ficar sem corpo na refatoração anterior; mantemos o corpo intacto.
         if should_recreate_installments:
         try:
             first_due = datetime.strptime(effective_data["first_due_date"], "%Y-%m-%d")
