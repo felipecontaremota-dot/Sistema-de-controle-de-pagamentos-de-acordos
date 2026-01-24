@@ -330,6 +330,13 @@ export default function Cases({ token, setToken }) {
     }
   }, [cases, sortOption]);
 
+  const getDisplayedStatusProcesso = (case_) => {
+    if (case_.status_acordo && case_.status_acordo !== 'Sem acordo') {
+      return 'Acordo';
+    }
+    return case_.status_processo;
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-white border-b border-slate-200">
@@ -731,38 +738,51 @@ export default function Cases({ token, setToken }) {
                     </td>
 
                     <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                      {editingStatusId === case_.id ? (
-                        <Select
-                          value={case_.status_processo}
-                          onValueChange={(value) => handleInlineStatusUpdate(case_.id, value)}
-                          disabled={updatingStatus}
-                        >
-                          <SelectTrigger className="h-8 px-2 text-xs border-none shadow-none focus:ring-0 [&>svg]:hidden">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STATUS_PROCESSO_OPTIONS.map((status) => (
-                              <SelectItem key={status} value={status}>
-                                {status}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className={`cursor-pointer ${
-                            STATUS_PROCESSO_STYLES[case_.status_processo] ||
-                            'bg-slate-100 text-slate-700 border-slate-200'
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingStatusId(case_.id);
-                          }}
-                        >
-                          {case_.status_processo}
-                        </Badge>
-                      )}
+                      {(() => {
+                        const displayedStatus = getDisplayedStatusProcesso(case_);
+                        const hasAgreement = case_.status_acordo && case_.status_acordo !== 'Sem acordo';
+
+                        if (editingStatusId === case_.id && !hasAgreement) {
+                          return (
+                            <Select
+                              value={displayedStatus}
+                              onValueChange={(value) =>
+                                handleInlineStatusUpdate(case_.id, value)
+                              }
+                              disabled={updatingStatus}
+                            >
+                              <SelectTrigger className="h-8 px-2 text-xs border-none shadow-none focus:ring-0 [&>svg]:hidden">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {STATUS_PROCESSO_OPTIONS.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {status}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          );
+                        }
+
+                        return (
+                          <Badge
+                            variant="outline"
+                            className={`cursor-pointer ${
+                              STATUS_PROCESSO_STYLES[displayedStatus] ||
+                              'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!hasAgreement) {
+                                setEditingStatusId(case_.id);
+                              }
+                            }}
+                          >
+                            {displayedStatus}
+                          </Badge>
+                        );
+                      })()}
                     </td>
 
                     <td className="px-6 py-4 font-mono text-slate-900">
