@@ -542,51 +542,63 @@ async def update_agreement(
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
-    if not update_data:
-        return {"message": "No changes to update"}
+update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+if not update_data:
+    return {"message": "No changes to update"}
 
-        await db.agreements.update_one({"id": agreement_id}, {"$set": update_data})
+# Atualiza o acordo
+await db.agreements.update_one({"id": agreement_id}, {"$set": update_data})
 
-    effective_data = {**agreement, **update_data}
+effective_data = {**agreement, **update_data}
 
-    installments = await db.installments.find({"agreement_id": agreement_id}, {"_id": 0}).to_list(1000)
-    has_paid_installments = any(inst.get("paid_date") for inst in installments)
+installments = await db.installments.find(
+    {"agreement_id": agreement_id}, {"_id": 0}
+).to_list(1000)
 
-    should_recreate_installments = False
-    if "installments_count" in update_data or "first_due_date" in update_data:
-        if has_paid_installments:
-            raise HTTPException(
-                status_code=400,
-                detail="Não é possível alterar parcelas quando já existem parcelas pagas.",
-            )
-        should_recreate_installments = True
+has_paid_installments = any(inst.get("paid_date") for inst in installments)
 
-        if should_recreate_installments:
-        try:
-            first_due = datetime.strptime(effective_data["first_due_date"], "%Y-%m-%d")
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail="Data da 1ª parcela inválida.") from exc
+should_recreate_installments = False
+if "installments_count" in update_data or "first_due_date" in update_data:
+    if has_paid_installments:
+        raise HTTPException(
+            status_code=400,
+            detail="Não é possível alterar parcelas quando já existem parcelas pagas.",
+        )
+    should_recreate_installments = True
 
-        if not effective_data.get("installments_count"):
-            raise HTTPException(status_code=400, detail="Número de parcelas inválido.")
+if should_recreate_installments:
+    try:
+        first_due = datetime.strptime(effective_data["first_due_date"], "%Y-%m-%d")
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Data da 1ª parcela inválida.",
+        ) from exc
 
-        # Mantém parcelas pagas e remove apenas as não pagas antes de recriar.
-        await db.installments.delete_many({"agreement_id": agreement_id, "paid_date": None})
+    if not effective_data.get("installments_count"):
+        raise HTTPException(
+            status_code=400,
+            detail="Número de parcelas inválido.",
+        )
 
-        for i in range(effective_data["installments_count"]):
-            due_date = first_due + relativedelta(months=i)
-            installment = {
-                "id": str(uuid.uuid4()),
-                "agreement_id": agreement_id,
-                "number": i + 1,
-                "is_entry": False,
-                "due_date": due_date.strftime("%Y-%m-%d"),
-                "paid_date": None,
-                "paid_value": None,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            await db.installments.insert_one(installment)
+    # Remove apenas parcelas não pagas
+    await db.installments.delete_many(
+        {"agreement_id": agreement_id, "paid_date": None}
+    )
+
+    for i in range(effective_data["installments_count"]):
+        due_date = first_due + relativedelta(months=i)
+        installment = {
+            "id": str(uuid.uuid4()),
+            "agreement_id": agreement_id,
+            "number": i + 1,
+            "is_entry": False,
+            "due_date": due_date.strftime("%Y-%m-%d"),
+            "paid_date": None,
+            "paid_value": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.installments.insert_one(installment)
 
     if effective_data.get("has_entry"):
         if effective_data.get("entry_via_alvara"):
