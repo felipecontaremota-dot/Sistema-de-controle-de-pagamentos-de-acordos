@@ -1281,10 +1281,9 @@ async def validate_import_file(
         if "first_due_date" in agreement_payload and agreement_payload.get("first_due_date") not in ("", None):
             if parse_date_value(agreement_payload.get("first_due_date")) is None:
                 warnings.append({"row": index + 1, "message": "Primeiro vencimento inválido"})
-        if "total_received_import" in agreement_payload and agreement_payload.get("total_received_import") not in ("", None):
-            total_received_value = parse_float_value(agreement_payload.get("total_received_import"))
-            if total_received_value is None or total_received_value <= 0:
-                warnings.append({"row": index + 1, "message": "Total recebido inválido"})                
+        value = parse_float_value(agreement_payload.get("total_received_import"))
+        if value is not None and value < 0:
+            warnings.append({"row": index + 1, "message": "Total recebido inválido"})             
         if "number" in installment_payload and installment_payload.get("number") not in ("", None):
             if parse_int_value(installment_payload.get("number")) is None:
                 warnings.append({"row": index + 1, "message": "Número da parcela inválido"})
@@ -1324,7 +1323,6 @@ async def commit_import_file(
     totals = {"cases": 0, "agreements": 0, "installments": 0, "alvaras": 0}
     results: list[dict[str, Any]] = []
     updated_case_ids: set[str] = set()
-    agreements_with_installments: set[str] = set()
     total_received_import_values: dict[str, float] = {}    
 
     for index, row in df.iterrows():
@@ -1430,7 +1428,6 @@ async def commit_import_file(
             }
             await db.installments.insert_one(installment_record)
             totals["installments"] += 1
-            agreements_with_installments.add(agreement_record["id"])
 
         if agreement_record:
             total_received_raw = agreement_payload.get("total_received_import")
@@ -1468,9 +1465,28 @@ async def commit_import_file(
 
     if total_received_import_values:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        
         for agreement_id, total_received_value in total_received_import_values.items():
-            if agreement_id in agreements_with_installments:
+
+            # Garante que o acordo existe
+            agreement_exists = await db.agreements.find_one(
+                {"id": agreement_id},
+                {"_id": 1}
+            )
+
+            if not agreement_exists:
                 continue
+
+            # Evita duplicação de parcelas
+            existing_installment = await db.installments.find_one(
+                {"agreement_id": agreement_id},
+                {"_id": 1}
+            )
+
+            if existing_installment:
+                continue
+
+            # Criação segura da parcela automática            
             installment_record = {
                 "id": str(uuid.uuid4()),
                 "agreement_id": agreement_id,
@@ -1481,6 +1497,7 @@ async def commit_import_file(
                 "paid_value": total_received_value,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
+            
             await db.installments.insert_one(installment_record)
             totals["installments"] += 1
     
