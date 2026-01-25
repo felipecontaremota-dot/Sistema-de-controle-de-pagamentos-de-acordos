@@ -231,8 +231,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
 
-def extract_beneficiary_code(text: Optional[str]) -> Optional[str]:
-    if not text:
+def extract_beneficiary_code(text: Any) -> Optional[str]:
+    if not isinstance(text, str) or not text:
         return None
     if "31" in text:
         return "31"
@@ -1345,13 +1345,14 @@ async def commit_import_file(
                 case_record = case_cache.get(case_cache_key)
             if not case_record:
                 case_id = str(uuid.uuid4())
+                polo_ativo_text = str(case_payload.get("polo_ativo_text") or "")                
                 case_record = {
                     "id": case_id,
                     "user_id": current_user["id"],
                     "debtor_name": str(case_payload.get("debtor_name") or ""),
                     "internal_id": case_internal_id or str(uuid.uuid4()),
                     "value_causa": case_value_causa,
-                    "polo_ativo_text": str(case_payload.get("polo_ativo_text") or ""),
+                    "polo_ativo_text": polo_ativo_text,
                     "notes": str(case_payload.get("notes") or ""),
                     "numero_processo": str(case_payload.get("numero_processo") or ""),
                     "data_protocolo": str(case_payload.get("data_protocolo") or ""),
@@ -1362,7 +1363,7 @@ async def commit_import_file(
                     "email": case_payload.get("email"),
                     "curso": str(case_payload.get("curso") or ""),
                     "created_at": datetime.now(timezone.utc).isoformat(),
-                    "polo_ativo_codigo": extract_beneficiary_code(case_payload.get("polo_ativo_text")),
+                    "polo_ativo_codigo": extract_beneficiary_code(polo_ativo_text),
                     "has_agreement": False,
                     "status_acordo": "",
                     "total_received": 0.0,
