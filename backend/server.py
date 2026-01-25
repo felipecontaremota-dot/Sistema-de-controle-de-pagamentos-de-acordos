@@ -1463,43 +1463,35 @@ async def commit_import_file(
             "message": "Linha processada com sucesso"
         })
 
-    if total_received_import_values:
+# 🔒 Total recebido só é usado quando NÃO há parcelas importadas
+if total_received_import_values:
+
+    for agreement_id, total_received_value in total_received_import_values.items():
+
+        # Se já existem parcelas, NÃO cria parcela automática
+        existing_installment = await db.installments.find_one(
+            {"agreement_id": agreement_id},
+            {"_id": 1}
+        )
+
+        if existing_installment:
+            continue
+
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        
-        for agreement_id, total_received_value in total_received_import_values.items():
 
-            # Garante que o acordo existe
-            agreement_exists = await db.agreements.find_one(
-                {"id": agreement_id},
-                {"_id": 1}
-            )
+        installment_record = {
+            "id": str(uuid.uuid4()),
+            "agreement_id": agreement_id,
+            "is_entry": False,
+            "number": 1,
+            "due_date": today,
+            "paid_date": today,
+            "paid_value": total_received_value,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
 
-            if not agreement_exists:
-                continue
-
-            # Evita duplicação de parcelas
-            existing_installment = await db.installments.find_one(
-                {"agreement_id": agreement_id},
-                {"_id": 1}
-            )
-
-            if existing_installment:
-                continue
-
-            # Criação segura da parcela automática            
-            installment_record = {
-                "id": str(uuid.uuid4()),
-                "agreement_id": agreement_id,
-                "is_entry": False,
-                "number": 1,
-                "due_date": today,
-                "paid_date": today,
-                "paid_value": total_received_value,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            
-            await db.installments.insert_one(installment_record)
-            totals["installments"] += 1
+        await db.installments.insert_one(installment_record)
+        totals["installments"] += 1
     
     for case_id in updated_case_ids:
         try:
