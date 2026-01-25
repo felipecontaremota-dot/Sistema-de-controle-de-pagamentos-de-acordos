@@ -1463,21 +1463,12 @@ async def commit_import_file(
             "message": "Linha processada com sucesso"
         })
 
+    # 🔒 Total recebido só deve ser utilizado quando NÃO houver parcelas importadas    
     if total_received_import_values:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         
         for agreement_id, total_received_value in total_received_import_values.items():
 
-            # Garante que o acordo existe
-            agreement_exists = await db.agreements.find_one(
-                {"id": agreement_id},
-                {"_id": 1}
-            )
-
-            if not agreement_exists:
-                continue
-
-            # Evita duplicação de parcelas
+            # Se já existem parcelas para o acordo, NÃO criar parcela automática
             existing_installment = await db.installments.find_one(
                 {"agreement_id": agreement_id},
                 {"_id": 1}
@@ -1486,7 +1477,8 @@ async def commit_import_file(
             if existing_installment:
                 continue
 
-            # Criação segura da parcela automática            
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            
             installment_record = {
                 "id": str(uuid.uuid4()),
                 "agreement_id": agreement_id,
