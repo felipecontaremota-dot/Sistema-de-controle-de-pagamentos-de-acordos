@@ -60,6 +60,7 @@ const fieldSections = [
       { key: 'entry_value', label: 'Valor da entrada' },
       { key: 'entry_via_alvara', label: 'Entrada via alvará (sim/não)' },
       { key: 'entry_date', label: 'Data da entrada' },
+      { key: 'total_received_import', label: 'Total recebido' },      
     ],
   },
   {
