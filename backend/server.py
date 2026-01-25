@@ -1308,6 +1308,7 @@ async def validate_import_file(
     }
 
 
+@app.post("/api/import/commit")
 @import_router.post("/commit")
 async def commit_import_file(
     payload: ImportCommitRequest,
