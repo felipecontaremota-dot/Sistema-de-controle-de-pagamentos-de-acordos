@@ -1281,6 +1281,10 @@ async def validate_import_file(
         if "first_due_date" in agreement_payload and agreement_payload.get("first_due_date") not in ("", None):
             if parse_date_value(agreement_payload.get("first_due_date")) is None:
                 warnings.append({"row": index + 1, "message": "Primeiro vencimento inválido"})
+        if "total_received_import" in agreement_payload and agreement_payload.get("total_received_import") not in ("", None):
+            total_received_value = parse_float_value(agreement_payload.get("total_received_import"))
+            if total_received_value is None or total_received_value <= 0:
+                warnings.append({"row": index + 1, "message": "Total recebido inválido"})                
         if "number" in installment_payload and installment_payload.get("number") not in ("", None):
             if parse_int_value(installment_payload.get("number")) is None:
                 warnings.append({"row": index + 1, "message": "Número da parcela inválido"})
@@ -1320,6 +1324,8 @@ async def commit_import_file(
     totals = {"cases": 0, "agreements": 0, "installments": 0, "alvaras": 0}
     results: list[dict[str, Any]] = []
     updated_case_ids: set[str] = set()
+    agreements_with_installments: set[str] = set()
+    total_received_import_values: dict[str, float] = {}    
 
     for index, row in df.iterrows():
         row_data = build_row_data(row, columns)
@@ -1424,6 +1430,14 @@ async def commit_import_file(
             }
             await db.installments.insert_one(installment_record)
             totals["installments"] += 1
+            agreements_with_installments.add(agreement_record["id"])
+
+        if agreement_record:
+            total_received_raw = agreement_payload.get("total_received_import")
+            if total_received_raw not in ("", None):
+                total_received_value = parse_float_value(total_received_raw)
+                if total_received_value is not None and total_received_value > 0:
+                    total_received_import_values.setdefault(agreement_record["id"], total_received_value)            
 
         has_alvara_payload = any(value not in ("", None) for value in alvara_payload.values())
         if case_record and has_alvara_payload:
@@ -1452,6 +1466,24 @@ async def commit_import_file(
             "message": "Linha processada com sucesso"
         })
 
+    if total_received_import_values:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        for agreement_id, total_received_value in total_received_import_values.items():
+            if agreement_id in agreements_with_installments:
+                continue
+            installment_record = {
+                "id": str(uuid.uuid4()),
+                "agreement_id": agreement_id,
+                "is_entry": False,
+                "number": 1,
+                "due_date": today,
+                "paid_date": today,
+                "paid_value": total_received_value,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.installments.insert_one(installment_record)
+            totals["installments"] += 1
+    
     for case_id in updated_case_ids:
         try:
             await update_case_materialized_fields(case_id)
