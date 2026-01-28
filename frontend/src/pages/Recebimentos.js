@@ -138,13 +138,16 @@ export default function Recebimentos({ token, setToken }) {
     );
   }
 
-  const chartData = data?.monthly_consolidation.map(m => ({
+  const monthlyConsolidation = Array.isArray(data?.monthly_consolidation)
+    ? data.monthly_consolidation
+    : [];
+  const chartData = monthlyConsolidation.map(m => ({
     month: m.month,
     '31': m.total_31,
     '14': m.total_14,
     Parcelas: m.total_parcelas,
     Alvarás: m.total_alvaras,
-  })) || [];
+  }));
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -417,7 +420,7 @@ export default function Recebimentos({ token, setToken }) {
               )}
             </div>
 
-            {data.monthly_consolidation && data.monthly_consolidation.length > 0 && (
+            {monthlyConsolidation.length > 0 && (
               <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden mt-8">
                 <div className="p-6 border-b border-slate-200">
                   <h3 className="text-lg font-semibold text-slate-900">Consolidado Mensal Detalhado</h3>
@@ -447,7 +450,7 @@ export default function Recebimentos({ token, setToken }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {data.monthly_consolidation.map((month) => (
+                      {monthlyConsolidation.map((month) => (
                         <tr key={month.month} className="table-row">
                           <td className="px-6 py-4 font-mono font-medium text-slate-900">{month.month}</td>
                           <td className="px-6 py-4 font-mono text-slate-900">{formatCurrency(month.total_31)}</td>
