@@ -1087,6 +1087,11 @@ async def get_receipts_optimized(
         start_date = today.replace(month=1, day=1).strftime("%Y-%m-%d")
         end_date = today.replace(month=12, day=31).strftime("%Y-%m-%d")
 
+    if not start_date:
+        start_date = "0001-01-01"
+    if not end_date:
+        end_date = "9999-12-31"
+    
     receipts = []
     totals = {
         "total_received": 0.0,
@@ -1104,7 +1109,7 @@ async def get_receipts_optimized(
     case_map = {c["id"]: c for c in cases}
 
     # Parcelas pagas
-    if type in (None, "all", "parcelas"):
+    if type in (None, "all", "parcelas", "entrada"):
         installments = await db.installments.find(
             {"paid_date": {"$ne": None}}, {"_id": 0}
         ).to_list(None)
@@ -1114,6 +1119,12 @@ async def get_receipts_optimized(
             if not paid_date or not (start_date <= paid_date <= end_date):
                 continue
 
+            is_entry = bool(inst.get("is_entry"))
+            if type == "entrada" and not is_entry:
+                continue
+            if type == "parcelas" and is_entry:
+                continue
+            
             agreement = await db.agreements.find_one(
                 {"id": inst["agreement_id"]}, {"_id": 0, "case_id": 1}
             )
