@@ -1119,6 +1119,12 @@ async def get_receipts_optimized(
         "total_alvaras": 0.0,
     }
     case_ids = set()
+    if not start or not end:
+        return {
+            "receipts": receipts,
+            "kpis": {**totals, "cases_with_receipts": len(case_ids)},
+            "monthly_consolidation": [],
+        }    
 
     cases = await db.cases.find(
         {"user_id": current_user["id"]},
