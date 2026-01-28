@@ -46,7 +46,14 @@ export default function Recebimentos({ token, setToken }) {
       const response = await axios.get(`${API}/receipts?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setData(response.data);
+      const normalizedData = {
+        receipts: Array.isArray(response.data?.receipts) ? response.data.receipts : [],
+        kpis: response.data?.kpis ?? {},
+        monthly_consolidation: Array.isArray(response.data?.monthly_consolidation)
+          ? response.data.monthly_consolidation
+          : [],
+      };
+      setData(normalizedData);
     } catch (error) {
       if (error.response?.status === 401) {
         setToken(null);
