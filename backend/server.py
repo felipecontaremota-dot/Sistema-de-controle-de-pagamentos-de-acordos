@@ -477,6 +477,8 @@ async def get_cases(
     has_agreement: Optional[bool] = None,
     beneficiario: Optional[str] = None,
     status_processo: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,    
     page: int = 1,
     limit: int = 10,
     current_user: dict = Depends(get_current_user)
@@ -494,6 +496,29 @@ async def get_cases(
     if status_processo:
         query["status_processo"] = status_processo
 
+    sort_mapping = {
+        "recent": ("created_at", -1),
+        "debtor_name_asc": ("debtor_name", 1),
+        "value_causa_asc": ("value_causa", 1),
+        "value_causa_desc": ("value_causa", -1),
+        "total_received_asc": ("total_received", 1),
+        "total_received_desc": ("total_received", -1),
+        "percent_recovered_asc": ("percent_recovered", 1),
+        "percent_recovered_desc": ("percent_recovered", -1),
+    }
+
+    sort_field = "created_at"
+    sort_direction = -1
+    if sort_by:
+        normalized_sort_by = sort_by.strip().lower()
+        normalized_sort_order = (sort_order or "").strip().lower()
+        sort_key = normalized_sort_by
+        if normalized_sort_by != "recent" and not normalized_sort_by.endswith(("_asc", "_desc")):
+            if normalized_sort_order in {"asc", "desc"}:
+                sort_key = f"{normalized_sort_by}_{normalized_sort_order}"
+        if sort_key in sort_mapping:
+            sort_field, sort_direction = sort_mapping[sort_key]
+            
     safe_page = max(page, 1)
     safe_limit = max(limit, 1)
     skip = (safe_page - 1) * safe_limit
@@ -501,7 +526,7 @@ async def get_cases(
     total = await db.cases.count_documents(query)
     cases = await (
         db.cases.find(query, {"_id": 0})
-        .sort("created_at", -1)
+        .sort(sort_field, sort_direction)
         .skip(skip)
         .limit(safe_limit)
         .to_list(safe_limit)
