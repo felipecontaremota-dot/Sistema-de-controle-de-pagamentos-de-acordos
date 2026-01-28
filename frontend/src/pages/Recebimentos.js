@@ -46,9 +46,17 @@ export default function Recebimentos({ token, setToken }) {
       const response = await axios.get(`${API}/receipts?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const defaultKpis = {
+        total_received: 0,
+        total_31: 0,
+        total_14: 0,
+        total_parcelas: 0,
+        total_alvaras: 0,
+        cases_with_receipts: 0,
+      };      
       const normalizedData = {
         receipts: Array.isArray(response.data?.receipts) ? response.data.receipts : [],
-        kpis: response.data?.kpis ?? {},
+        kpis: { ...defaultKpis, ...(response.data?.kpis ?? {}) },
         monthly_consolidation: Array.isArray(response.data?.monthly_consolidation)
           ? response.data.monthly_consolidation
           : [],
