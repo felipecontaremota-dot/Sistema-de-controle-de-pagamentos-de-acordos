@@ -216,6 +216,21 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def safe_parse_date(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
+
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     token = credentials.credentials
     try:
@@ -1091,6 +1106,9 @@ async def get_receipts_optimized(
         start_date = "0001-01-01"
     if not end_date:
         end_date = "9999-12-31"
+
+    start = safe_parse_date(start_date)
+    end = safe_parse_date(end_date)
     
     receipts = []
     totals = {
@@ -1115,8 +1133,10 @@ async def get_receipts_optimized(
         ).to_list(None)
 
         for inst in installments:
-            paid_date = inst.get("paid_date")
-            if not paid_date or not (start_date <= paid_date <= end_date):
+            paid_date = safe_parse_date(inst.get("paid_date"))
+            if not paid_date or not start or not end:
+                continue
+            if not (start <= paid_date <= end):
                 continue
 
             is_entry = bool(inst.get("is_entry"))
@@ -1141,7 +1161,7 @@ async def get_receipts_optimized(
             label = "Entrada" if inst.get("is_entry") else "Parcela"
 
             receipts.append({
-                "date": paid_date,
+                "date": paid_date.strftime("%Y-%m-%d"),
                 "case_id": case["id"],
                 "debtor": case["debtor_name"],
                 "numero_processo": case.get("numero_processo", ""),
@@ -1163,8 +1183,10 @@ async def get_receipts_optimized(
         ).to_list(None)
 
         for alv in alvaras:
-            date = alv.get("data_alvara")
-            if not date or not (start_date <= date <= end_date):
+            alvara_date = safe_parse_date(alv.get("data_alvara"))
+            if not alvara_date or not start or not end:
+                continue
+            if not (start <= alvara_date <= end):
                 continue
 
             case = case_map.get(alv["case_id"])
@@ -1178,7 +1200,7 @@ async def get_receipts_optimized(
             value = alv.get("valor_alvara", 0.0)
 
             receipts.append({
-                "date": date,
+                "date": alvara_date.strftime("%Y-%m-%d"),
                 "case_id": case["id"],
                 "debtor": case["debtor_name"],
                 "numero_processo": case.get("numero_processo", ""),
