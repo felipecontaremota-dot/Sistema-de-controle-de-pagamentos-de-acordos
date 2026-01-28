@@ -120,6 +120,12 @@ export default function Cases({ token, setToken }) {
       if (statusProcessoFilter && statusProcessoFilter !== 'all') params.append('status_processo', statusProcessoFilter);
       params.append('page', page.toString());
       params.append('limit', limit.toString());
+      const match = sortOption.match(/^(.*)_(asc|desc)$/);
+      const sortParams = match
+        ? { sort_by: match[1], sort_order: match[2] }
+        : { sort_by: 'recent', sort_order: 'desc' };
+      params.append('sort_by', sortParams.sort_by);
+      params.append('sort_order', sortParams.sort_order);      
       
       const response = await api.get(`/cases?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -363,6 +369,11 @@ export default function Cases({ token, setToken }) {
       setLimit(parsedLimit);
       setPage(1);
     }
+  };
+  
+  const handleSortChange = (value) => {
+    setSortOption(value);
+    setPage(1);
   };  
   
   const getStatusBadge = (status) => {
@@ -392,38 +403,7 @@ export default function Cases({ token, setToken }) {
     );
   };
 
-  const toNumericValue = (value) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const sortedCases = useMemo(() => {
-    const casesCopy = [...cases];
-
-    switch (sortOption) {
-      case 'debtor_name_asc':
-        return casesCopy.sort((a, b) =>
-          (a.debtor_name || '').localeCompare(b.debtor_name || '', 'pt-BR', { sensitivity: 'base' })
-        );
-      case 'value_causa_asc':
-        return casesCopy.sort((a, b) => toNumericValue(a.value_causa) - toNumericValue(b.value_causa));
-      case 'value_causa_desc':
-        return casesCopy.sort((a, b) => toNumericValue(b.value_causa) - toNumericValue(a.value_causa));
-      case 'total_received_asc':
-        return casesCopy.sort((a, b) => toNumericValue(a.total_received) - toNumericValue(b.total_received));
-      case 'total_received_desc':
-        return casesCopy.sort((a, b) => toNumericValue(b.total_received) - toNumericValue(a.total_received));
-      case 'percent_recovered_asc':
-        return casesCopy.sort((a, b) => toNumericValue(a.percent_recovered) - toNumericValue(b.percent_recovered));
-      case 'percent_recovered_desc':
-        return casesCopy.sort((a, b) => toNumericValue(b.percent_recovered) - toNumericValue(a.percent_recovered));
-      case 'recent':
-      default:
-        return casesCopy;
-    }
-  }, [cases, sortOption]);
-
-  const pageCaseIds = useMemo(() => sortedCases.map((case_) => case_.id), [sortedCases]);
+  const pageCaseIds = useMemo(() => cases.map((case_) => case_.id), [cases]);
   const allCasesSelected =
     pageCaseIds.length > 0 && pageCaseIds.every((caseId) => selectedCases.includes(caseId));
   const someCasesSelected = selectedCases.length > 0 && !allCasesSelected;
@@ -780,7 +760,7 @@ export default function Cases({ token, setToken }) {
 
               <div>
                 <Label htmlFor="sort-cases">Ordenar por</Label>
-                <Select value={sortOption} onValueChange={setSortOption}>
+                <Select value={sortOption} onValueChange={handleSortChange}>
                   <SelectTrigger className="mt-1" data-testid="sort-cases">
                     <SelectValue placeholder="Mais recentes" />
                   </SelectTrigger>
@@ -876,7 +856,7 @@ export default function Cases({ token, setToken }) {
               </thead>
 
               <tbody className="divide-y divide-slate-200">
-                {sortedCases.map((case_) => (
+                {cases.map((case_) => (
                   <tr
                     key={case_.id}
                     className="table-row cursor-pointer"
@@ -1082,7 +1062,7 @@ export default function Cases({ token, setToken }) {
             </div>
           </div>
 
-          {sortedCases.length === 0 && (
+          {cases.length === 0 && (
             <div className="text-center py-12" data-testid="empty-state">
               <p className="text-slate-500">Nenhum caso encontrado</p>
             </div>
